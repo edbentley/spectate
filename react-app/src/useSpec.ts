@@ -18,36 +18,49 @@ type SpecFn = (args: {
   clickOn: (component: Component) => void;
   // Actions
   sendPost: (json: Record<string, Variable>) => void;
+  equals: (variable: Variable, value: string) => void;
 }) => void;
 export type NewSpec = (description: string, spec: SpecFn) => void;
 type SpecProps<Spec> = Record<keyof Spec, any>;
 type SpecState<Spec> = Record<keyof Spec, any>;
-type SpecEvent =
-  | { type: "sendPost"; json: Record<string, Variable> }
+
+type Events = { specEvents: SpecEvent[]; specDescription: string }[];
+type SpecEvent = SpecEventUserInput | SpecEventAction;
+type SpecEventUserInput =
   | { type: "enterText"; text: StringText; example: string }
   | { type: "clickOn"; component: Component }
+type SpecEventAction =
+  | { type: "sendPost"; json: Record<string, Variable> }
+  | { type: "equals"; variable: Variable; value: string }
 
 export function useSpec<Spec extends Record<string, SpecField>>(getSpec: (newSpec: NewSpec) => Spec): SpecProps<Spec> {
 
-  const events: SpecEvent[] = [];
+  const events: Events = [];
 
-  const sendPost = (json: Record<string, Variable>) => {
-    events.push({ type: "sendPost", json });
+  const sendPost = (index: number) => (json: Record<string, Variable>) => {
+    events[index].specEvents.push({ type: "sendPost", json });
   }
 
-  const enterText = (text: StringText, example: string) => {
-    events.push({ type: "enterText", text, example });
+  const enterText = (index: number) =>(text: StringText, example: string) => {
+    events[index].specEvents.push({ type: "enterText", text, example });
   }
 
-  const clickOn = (component: Component) => {
-    events.push({ type: "clickOn", component });
+  const clickOn = (index: number) =>(component: Component) => {
+    events[index].specEvents.push({ type: "clickOn", component });
+  }
+
+  const equals = (index: number) =>(variable: Variable, value: string) => {
+    events[index].specEvents.push({ type: "equals", variable, value });
   }
 
   const newSpec: NewSpec = (description, specFn) => {
+    const index = events.length;
+    events.push({ specEvents: [], specDescription: description });
     specFn({
-      sendPost,
-      enterText,
-      clickOn
+      sendPost: sendPost(index),
+      enterText: enterText(index),
+      clickOn: clickOn(index),
+      equals: equals(index)
     });
   }
 
@@ -58,15 +71,18 @@ export function useSpec<Spec extends Record<string, SpecField>>(getSpec: (newSpe
   return specProps;
 }
 
-function useGenerateSpecProps<Spec extends Record<string, SpecField>>(spec: Spec, events: SpecEvent[]): SpecProps<Spec> {
+function useGenerateSpecProps<Spec extends Record<string, SpecField>>(spec: Spec, events: Events): SpecProps<Spec> {
   const [specState, setSpecState] = useState(getInitState(spec));
 
   const specProps: SpecProps<Spec> = {} as any;
 
   Object.entries(spec).forEach(([specName, specField]) => {
-    // Only props for Component type
     if (specField.type !== "text") {
+      // Props for Component type
       specProps[specName as keyof Spec] = getPropsForField(specField, specState, setSpecState, events, spec);
+    } else {
+      // Props is state for Variable type
+      specProps[specName as keyof Spec] = specState[specName];
     }
   });
 
@@ -100,9 +116,9 @@ function getStateKeyForVariable<Spec extends Record<string, SpecField>>(variable
 
 function getPropsForField<Spec extends Record<string, SpecField>>(
   specField: Component,
-  state: Record<keyof Spec, any>,
-  setState: React.Dispatch<React.SetStateAction<Record<keyof Spec, any>>>,
-  events: SpecEvent[],
+  state: SpecState<Spec>,
+  setState: React.Dispatch<React.SetStateAction<SpecState<Spec>>>,
+  events: Events,
   spec: Spec,
 ): React.HTMLProps<any> {
 
@@ -110,22 +126,77 @@ function getPropsForField<Spec extends Record<string, SpecField>>(
     case "button":
       return {
         onClick: () => {
-          events.forEach((event, index) => {
-            if (event.type === 'clickOn' && event.component === specField) {
-              // We're being clicked on
-              const nextEvent = events[index + 1];
+          const possibleActions: {fns: (() => void)[]; stateSimilarity: number; specDescription: string}[] = [];
 
-              // Check if next event is action
-              if (nextEvent?.type === "sendPost") {
-                const json: Record<string, string> = {};
-                Object.entries(nextEvent.json).forEach(([key, variable]) => {
-                  const varStateKey = getStateKeyForVariable(variable, spec);
-                  json[key] = state[varStateKey];
+          events.forEach(({ specEvents, specDescription }) => {
+            specEvents.reduce((prevSpecState, event, index) => {
+              const specState = updateSpecState(prevSpecState, event, spec);
+
+              if (event.type === 'clickOn' && event.component === specField) {
+                // We're being clicked on, gather up the next action events
+
+                // We're the last event
+                if (index === specEvents.length - 1) return specState;
+
+                let nextActionEventsEndIndex = specEvents.slice(index + 1).findIndex(event => !isAction(event));
+                if (nextActionEventsEndIndex === -1) {
+                  nextActionEventsEndIndex = specEvents.length;
+                }
+
+                const nextActionEvents = specEvents.slice(index + 1, index + 1 + nextActionEventsEndIndex);
+
+                const fns: (() => void)[] = [];
+
+                nextActionEvents.forEach(nextEvent => {
+                  if (nextEvent.type === "sendPost") {
+                    const json: Record<string, string> = {};
+                    Object.entries(nextEvent.json).forEach(([key, variable]) => {
+                      const varStateKey = getStateKeyForVariable(variable, spec);
+                      json[key] = state[varStateKey];
+                    });
+                    fns.push(
+                      () => {
+                        console.log("POST", json);
+                      }
+                    );
+                  } else if (nextEvent.type === "equals") {
+                    // We change some state on equals
+                    const varStateKey = getStateKeyForVariable(nextEvent.variable, spec);
+                    fns.push(
+                      () => {
+                        setState(s => ({...s, [varStateKey]: nextEvent.value }));
+                      }
+                    );
+                  }
+                })
+
+                possibleActions.push({
+                  fns,
+                  stateSimilarity: getSimilarityScore(specState, state),
+                  specDescription
                 });
-                console.log("POST", json);
               }
-            }
+              return specState;
+            }, getInitState(spec));
           })
+
+          // We choose action whose state most closely matches current state
+          if (possibleActions.length > 0) {
+            const actionsRanked = possibleActions.sort(({ stateSimilarity: similarityA }, { stateSimilarity: similarityB }) => {
+              return similarityB - similarityA;
+            });
+
+            if (actionsRanked.length > 1 && actionsRanked[0].stateSimilarity === actionsRanked[1].stateSimilarity) {
+              console.warn(`Warning: couldn't decide best spec to choose. Possible specs:
+- ${actionsRanked[0].specDescription} (chosen)
+- ${actionsRanked[1].specDescription}`)
+            }
+
+            actionsRanked[0].fns.forEach(fn => {
+              fn();
+            });
+          }
+
         }
       };
 
@@ -133,10 +204,11 @@ function getPropsForField<Spec extends Record<string, SpecField>>(
       let value = "";
       let onValueChange = (val: string) => {};
 
-      events.forEach((event, index) => {
+      // TODO
+      events[0].specEvents.forEach((event, index) => {
         if (event.type === 'clickOn' && event.component === specField) {
           // We're focussed
-          const nextEvent = events[index + 1];
+          const nextEvent = events[0].specEvents[index + 1];
 
           // Check if next event is relevant user input
           if (nextEvent?.type === "enterText") {
@@ -154,4 +226,36 @@ function getPropsForField<Spec extends Record<string, SpecField>>(
         type: specField.inputType
       };
   }
+}
+
+function updateSpecState<Spec extends Record<string, SpecField>>(prevSpecState: SpecState<Spec>, event: SpecEvent, spec: Spec): SpecState<Spec> {
+  switch (event.type) {
+    case "enterText":
+      const varStateKey = getStateKeyForVariable(event.text, spec);
+
+      return {
+        ...prevSpecState,
+        [varStateKey]: event.example
+      }
+
+    default:
+      return prevSpecState
+  }
+}
+
+function isAction(specEvent: SpecEvent): specEvent is SpecEventAction {
+  return specEvent.type === "equals" || specEvent.type === "sendPost";
+}
+function isUserInput(specEvent: SpecEvent): specEvent is SpecEventUserInput {
+  return specEvent.type === "clickOn" || specEvent.type === "enterText";
+}
+
+function getSimilarityScore<Spec extends Record<string, SpecField>>(state1: SpecState<Spec>, state2: SpecState<Spec>) {
+  return Object.entries(state1).reduce((total, [fieldName, fieldVal]) => {
+    // For strings, compare if empty or not
+    if (Boolean(state2[fieldName]) === Boolean(fieldVal)) {
+      return total + 1;
+    }
+    return total;
+  }, 0);
 }

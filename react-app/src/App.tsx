@@ -9,9 +9,11 @@ const mySpec = (newSpec: NewSpec) => {
   const PasswordInput = newInput({ inputType: "password" });
   const PasswordText = newText();
 
+  const ErrorText = newText();
+
   const SignUpButton = newButton();
 
-  newSpec("Can sign up with email and password", ({ clickOn, enterText, sendPost }) => {
+  newSpec("Can sign up with email and password", ({ clickOn, enterText, sendPost, equals }) => {
     clickOn(EmailInput);
     enterText(EmailText, "hi@test.com");
 
@@ -21,9 +23,25 @@ const mySpec = (newSpec: NewSpec) => {
     clickOn(SignUpButton);
 
     sendPost({ email: EmailText, password: PasswordText });
+    equals(ErrorText, "");
   });
 
-  return { EmailInput, EmailText, PasswordInput, PasswordText, SignUpButton };
+  newSpec("Shows error if empty email", ({ clickOn, enterText, equals }) => {
+    clickOn(SignUpButton);
+
+    equals(ErrorText, "Email can't be empty");
+  });
+
+  newSpec("Shows error if empty password", ({ clickOn, enterText, equals }) => {
+    clickOn(EmailInput);
+    enterText(EmailText, "hi@test.com");
+
+    clickOn(SignUpButton);
+
+    equals(ErrorText, "Password can't be empty");
+  });
+
+  return { EmailInput, EmailText, PasswordInput, PasswordText, SignUpButton, ErrorText };
 };
 
 
@@ -43,6 +61,8 @@ function App() {
       </label>
 
       <button {...props.SignUpButton}>Sign Up</button>
+
+      {props.ErrorText && <span>{props.ErrorText}</span>}
     </div>
   )
 }
