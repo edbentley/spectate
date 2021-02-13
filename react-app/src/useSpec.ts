@@ -23,12 +23,14 @@ type SpecFn = (args: {
 export type NewSpec = (description: string, spec: SpecFn) => void;
 type SpecProps<Spec> = Record<keyof Spec, any>;
 type SpecState<Spec> = Record<keyof Spec, any>;
+type SpecStateWithFocus<Spec> = { state: SpecState<Spec>; focus: Component | null };
 
 type Events = { specEvents: SpecEvent[]; specDescription: string }[];
-type SpecEvent = SpecEventUserInput | SpecEventAction;
+type SpecEvent = SpecEventUserInput | SpecEventAction | SpecEventFocus;
+type SpecEventFocus =
+  | { type: "clickOn"; component: Component }
 type SpecEventUserInput =
   | { type: "enterText"; text: StringText; example: string }
-  | { type: "clickOn"; component: Component }
 type SpecEventAction =
   | { type: "sendPost"; json: Record<string, Variable> }
   | { type: "equals"; variable: Variable; value: string }
@@ -100,7 +102,13 @@ function getInitState<Spec extends Record<string, SpecField>>(spec: Spec): SpecS
   });
 
   return specState;
+}
 
+function getInitStateWithFocus<Spec extends Record<string, SpecField>>(spec: Spec): SpecStateWithFocus<Spec> {
+  return {
+    state: getInitState(spec),
+    focus: null
+  }
 }
 
 function getStateForField(specField: Variable) {
@@ -172,24 +180,29 @@ function getPropsForField<Spec extends Record<string, SpecField>>(
 
                 possibleActions.push({
                   fns,
-                  stateSimilarity: getSimilarityScore(specState, state),
+                  stateSimilarity: getSimilarityScore(specState.state, state),
                   specDescription
                 });
               }
               return specState;
-            }, getInitState(spec));
+            }, getInitStateWithFocus(spec));
           })
 
-          // We choose action whose state most closely matches current state
+          // We choose action based on whose state most closely matches current state
           if (possibleActions.length > 0) {
             const actionsRanked = possibleActions.sort(({ stateSimilarity: similarityA }, { stateSimilarity: similarityB }) => {
               return similarityB - similarityA;
             });
 
-            if (actionsRanked.length > 1 && actionsRanked[0].stateSimilarity === actionsRanked[1].stateSimilarity) {
-              console.warn(`Warning: couldn't decide best spec to choose. Possible specs:
+            const clashingSpecs = actionsRanked.slice(1).filter(
+              action => action.stateSimilarity === actionsRanked[0].stateSimilarity
+            );
+
+            if (clashingSpecs.length > 0) {
+              const clashingSpecNames = clashingSpecs.map(x => `- ${x.specDescription}`);
+              console.warn(`Warning: couldn't decide best spec to choose for ${specField.type}. Possible specs:
 - ${actionsRanked[0].specDescription} (chosen)
-- ${actionsRanked[1].specDescription}`)
+${clashingSpecNames.join("\n")}`)
             }
 
             actionsRanked[0].fns.forEach(fn => {
@@ -201,41 +214,91 @@ function getPropsForField<Spec extends Record<string, SpecField>>(
       };
 
     case "input":
-      let value = "";
-      let onValueChange = (val: string) => {};
+      const possibleProps: {
+        connectedVariable: Variable;
+        value: string;
+        onValueChange: (val: string) => void;
+        stateSimilarity: number;
+        specDescription: string
+      }[] = [];
 
-      // TODO
-      events[0].specEvents.forEach((event, index) => {
-        if (event.type === 'clickOn' && event.component === specField) {
-          // We're focussed
-          const nextEvent = events[0].specEvents[index + 1];
+      events.forEach(({ specEvents, specDescription }) => {
+        specEvents.reduce((prevSpecState, event) => {
+          const specState = updateSpecState(prevSpecState, event, spec);
 
-          // Check if next event is relevant user input
-          if (nextEvent?.type === "enterText") {
-            const varStateKey = getStateKeyForVariable(nextEvent.text, spec);
-            value = state[varStateKey];
-            onValueChange = val => setState(s => ({ ...s, [varStateKey]: val }));
+          if (event.type === "enterText" && specState.focus === specField) {
+            // We're focussed, so this input is now connected with text Variable entered
+            const connectedVariable = event.text;
+
+            const varStateKey = getStateKeyForVariable(connectedVariable, spec);
+
+            possibleProps.push({
+              connectedVariable,
+              value: state[varStateKey],
+              onValueChange: val => {
+                setState(s => ({ ...s, [varStateKey]: val }));
+              },
+              stateSimilarity: getSimilarityScore(specState.state, state),
+              specDescription
+            });
           }
-        }
+
+          return specState;
+        }, getInitStateWithFocus(spec));
       })
+
+      // We choose prop based on whose state most closely matches current state
+      if (possibleProps.length > 0) {
+        const propsRanked = possibleProps.sort(({ stateSimilarity: similarityA }, { stateSimilarity: similarityB }) => {
+          return similarityB - similarityA;
+        });
+
+        const clashingSpecs = propsRanked.slice(1).filter(
+          prop => prop.stateSimilarity === propsRanked[0].stateSimilarity &&
+          prop.connectedVariable !== propsRanked[0].connectedVariable
+        );
+
+        if (clashingSpecs.length > 0) {
+          const clashingSpecNames = clashingSpecs.map(x => `- ${x.specDescription}`);
+          console.warn(`Warning: couldn't decide best spec to choose for ${specField.type}. Possible specs:
+- ${propsRanked[0].specDescription} (chosen)
+${clashingSpecNames.join("\n")}`)
+        }
+
+        return {
+          value: propsRanked[0].value,
+          onChange: event => {
+            propsRanked[0].onValueChange((event.target as HTMLInputElement).value);
+          },
+          type: specField.inputType
+        }
+      }
+
       return {
-        value,
-        onChange: event => {
-          onValueChange((event.target as HTMLInputElement).value);
-        },
-        type: specField.inputType
+        value: "",
+        onChange: () => {},
       };
   }
 }
 
-function updateSpecState<Spec extends Record<string, SpecField>>(prevSpecState: SpecState<Spec>, event: SpecEvent, spec: Spec): SpecState<Spec> {
+function updateSpecState<Spec extends Record<string, SpecField>>(prevSpecState: SpecStateWithFocus<Spec>, event: SpecEvent, spec: Spec): SpecStateWithFocus<Spec> {
   switch (event.type) {
     case "enterText":
       const varStateKey = getStateKeyForVariable(event.text, spec);
 
       return {
         ...prevSpecState,
-        [varStateKey]: event.example
+        state: {
+          ...prevSpecState.state,
+          [varStateKey]: event.example
+        },
+      }
+
+    case "clickOn":
+      const focussedComponent = event.component;
+      return {
+        ...prevSpecState,
+        focus: focussedComponent
       }
 
     default:
@@ -247,7 +310,7 @@ function isAction(specEvent: SpecEvent): specEvent is SpecEventAction {
   return specEvent.type === "equals" || specEvent.type === "sendPost";
 }
 function isUserInput(specEvent: SpecEvent): specEvent is SpecEventUserInput {
-  return specEvent.type === "clickOn" || specEvent.type === "enterText";
+  return specEvent.type === "enterText";
 }
 
 function getSimilarityScore<Spec extends Record<string, SpecField>>(state1: SpecState<Spec>, state2: SpecState<Spec>) {
