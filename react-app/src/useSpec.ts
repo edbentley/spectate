@@ -1,28 +1,41 @@
 import {useState} from "react";
 
-type SpecField = Variable | Component;
+type SpecField = Variable | Component | Effect;
 type Variable = StringText;
 type Component = Input | Button;
+type Effect = { type: "effect"; fn: (getVal: GetValFromVariable) => void };
 
 type Input = { type: "input"; inputType?: HTMLInputElement["type"] };
 type Button = { type: "button" };
 type StringText = { type: "text" };
 
+type GetValFromVariable = (variable: Variable) => string;
+
 export const newInput = (opts?: { inputType?: HTMLInputElement["type"] }): Input => ({ ...opts, type: "input" });
 export const newButton = (): Button => ({ type: "button" });
 export const newText = (): StringText => ({ type: "text" });
+export const newEffect = (fn: (getVal: GetValFromVariable) => void): Effect => ({ type: "effect", fn });
 
 type SpecFn = (args: {
   // User inputs
   enterText: (text: StringText, example: string) => void;
   clickOn: (component: Component) => void;
   // Actions
-  sendPost: (json: Record<string, Variable>) => void;
+  doEffect: (action: Effect) => void;
   equals: (variable: Variable, value: string) => void;
 }) => void;
 export type NewSpec = (description: string, spec: SpecFn) => void;
-type SpecProps<Spec> = Record<keyof Spec, any>;
-type SpecState<Spec> = Record<keyof Spec, any>;
+
+type SpecProps<Spec> = {
+  [K in keyof Spec]: Spec[K] extends StringText ?
+    string : Spec[K] extends Input ?
+    React.InputHTMLAttributes<HTMLInputElement> : Spec[K] extends Button ?
+    React.ButtonHTMLAttributes<HTMLButtonElement> : never;
+}
+
+type SpecState<Spec> = {
+  [K in keyof Spec]: Spec[K] extends StringText ? string : never;
+}
 type SpecStateWithFocus<Spec> = { state: SpecState<Spec>; focus: Component | null };
 
 type Events = { specEvents: SpecEvent[]; specDescription: string }[];
@@ -32,15 +45,15 @@ type SpecEventFocus =
 type SpecEventUserInput =
   | { type: "enterText"; text: StringText; example: string }
 type SpecEventAction =
-  | { type: "sendPost"; json: Record<string, Variable> }
+  | { type: "doEffect"; action: Effect }
   | { type: "equals"; variable: Variable; value: string }
 
 export function useSpec<Spec extends Record<string, SpecField>>(getSpec: (newSpec: NewSpec) => Spec): SpecProps<Spec> {
 
   const events: Events = [];
 
-  const sendPost = (index: number) => (json: Record<string, Variable>) => {
-    events[index].specEvents.push({ type: "sendPost", json });
+  const doEffect = (index: number) => (action: Effect) => {
+    events[index].specEvents.push({ type: "doEffect", action });
   }
 
   const enterText = (index: number) =>(text: StringText, example: string) => {
@@ -59,7 +72,7 @@ export function useSpec<Spec extends Record<string, SpecField>>(getSpec: (newSpe
     const index = events.length;
     events.push({ specEvents: [], specDescription: description });
     specFn({
-      sendPost: sendPost(index),
+      doEffect: doEffect(index),
       enterText: enterText(index),
       clickOn: clickOn(index),
       equals: equals(index)
@@ -79,10 +92,10 @@ function useGenerateSpecProps<Spec extends Record<string, SpecField>>(spec: Spec
   const specProps: SpecProps<Spec> = {} as any;
 
   Object.entries(spec).forEach(([specName, specField]) => {
-    if (specField.type !== "text") {
+    if (isComponent(specField)) {
       // Props for Component type
-      specProps[specName as keyof Spec] = getPropsForField(specField, specState, setSpecState, events, spec);
-    } else {
+      specProps[specName as keyof Spec] = getPropsForField(specField, specState, setSpecState, events, spec) as any;
+    } else if (isVariable(specField)) {
       // Props is state for Variable type
       specProps[specName as keyof Spec] = specState[specName];
     }
@@ -97,7 +110,7 @@ function getInitState<Spec extends Record<string, SpecField>>(spec: Spec): SpecS
   Object.entries(spec).forEach(([specName, specField]) => {
     // Only state for Variable type
     if (specField.type === "text") {
-      specState[specName as keyof Spec] = getStateForField(specField);
+      specState[specName as keyof Spec] = getStateForField(specField) as any;
     }
   });
 
@@ -156,17 +169,11 @@ function getPropsForField<Spec extends Record<string, SpecField>>(
                 const fns: (() => void)[] = [];
 
                 nextActionEvents.forEach(nextEvent => {
-                  if (nextEvent.type === "sendPost") {
-                    const json: Record<string, string> = {};
-                    Object.entries(nextEvent.json).forEach(([key, variable]) => {
+                  if (nextEvent.type === "doEffect") {
+                    fns.push(() => nextEvent.action.fn(variable => {
                       const varStateKey = getStateKeyForVariable(variable, spec);
-                      json[key] = state[varStateKey];
-                    });
-                    fns.push(
-                      () => {
-                        console.log("POST", json);
-                      }
-                    );
+                      return state[varStateKey];
+                    }));
                   } else if (nextEvent.type === "equals") {
                     // We change some state on equals
                     const varStateKey = getStateKeyForVariable(nextEvent.variable, spec);
@@ -307,10 +314,17 @@ function updateSpecState<Spec extends Record<string, SpecField>>(prevSpecState: 
 }
 
 function isAction(specEvent: SpecEvent): specEvent is SpecEventAction {
-  return specEvent.type === "equals" || specEvent.type === "sendPost";
+  return specEvent.type === "equals" || specEvent.type === "doEffect";
 }
 function isUserInput(specEvent: SpecEvent): specEvent is SpecEventUserInput {
   return specEvent.type === "enterText";
+}
+
+function isVariable(specField: SpecField): specField is Variable {
+  return specField.type === "text";
+}
+function isComponent(specField: SpecField): specField is Component {
+  return specField.type === "input" || specField.type === "button";
 }
 
 function getSimilarityScore<Spec extends Record<string, SpecField>>(state1: SpecState<Spec>, state2: SpecState<Spec>) {

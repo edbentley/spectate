@@ -1,6 +1,6 @@
 import React from 'react'
 import './App.css'
-import { useSpec, newInput, newText, newButton, NewSpec } from './useSpec'
+import { useSpec, newInput, newText, newButton, NewSpec, newEffect } from './useSpec'
 
 const mySpec = (newSpec: NewSpec) => {
   const EmailInput = newInput();
@@ -13,7 +13,11 @@ const mySpec = (newSpec: NewSpec) => {
 
   const SignUpButton = newButton();
 
-  newSpec("Can sign up with email and password", ({ clickOn, enterText, sendPost, equals }) => {
+  const PostJson = newEffect((getVal) => {
+    console.log("POST", { email: getVal(EmailText), password: getVal(PasswordText) });
+  });
+
+  newSpec("Can sign up with email and password", ({ clickOn, enterText, doEffect, equals }) => {
     clickOn(EmailInput);
     enterText(EmailText, "hi@test.com");
 
@@ -22,7 +26,7 @@ const mySpec = (newSpec: NewSpec) => {
 
     clickOn(SignUpButton);
 
-    sendPost({ email: EmailText, password: PasswordText });
+    doEffect(PostJson);
     equals(ErrorText, "");
   });
 
@@ -52,7 +56,7 @@ function App() {
     <div className="App">
       <label>
         Email{" "}
-        <input onChange {...props.EmailInput} />
+        <input {...props.EmailInput} />
       </label>
 
       <label>
