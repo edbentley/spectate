@@ -1,51 +1,43 @@
 import React from 'react'
 import './App.css'
-import { useSpec, newInput, newText, newButton, NewSpec, newEffect } from './useSpec'
+import { useSpec, newInput, newText, newButton, NewSpec, newTextList } from './useSpec'
 
 const mySpec = (newSpec: NewSpec) => {
-  const EmailInput = newInput();
-  const EmailText = newText();
+  const NewCardInput = newInput();
+  const NewCardText = newText();
+  const PrevCardText = newText();
 
-  const PasswordInput = newInput({ inputType: "password" });
-  const PasswordText = newText();
+  const CardsList = newTextList();
 
-  const ErrorText = newText();
+  const AddButton = newButton();
 
-  const SignUpButton = newButton();
+  newSpec("Can create multiple TODO cards", ({ clickOn, enterText, doEffect, equals }) => {
+    clickOn(NewCardInput);
+    enterText(NewCardText, "Wash the dishes");
 
-  const PostJson = newEffect((getVal) => {
-    console.log("POST", { email: getVal(EmailText), password: getVal(PasswordText) });
+    clickOn(AddButton);
+
+    equals(CardsList, [NewCardText]);
+
+    // Store for later
+    equals(PrevCardText, NewCardText);
+
+    equals(NewCardText, "");
+
+
+    // 2nd time
+
+    clickOn(NewCardInput);
+    enterText(NewCardText, "Clean the kitchen");
+
+    clickOn(AddButton);
+
+    equals(CardsList, [PrevCardText, NewCardText]);
+
+    equals(NewCardText, "");
   });
 
-  newSpec("Can sign up with email and password", ({ clickOn, enterText, doEffect, equals }) => {
-    clickOn(EmailInput);
-    enterText(EmailText, "hi@test.com");
-
-    clickOn(PasswordInput);
-    enterText(PasswordText, "password!");
-
-    clickOn(SignUpButton);
-
-    doEffect(PostJson);
-    equals(ErrorText, "");
-  });
-
-  newSpec("Shows error if empty email", ({ clickOn, enterText, equals }) => {
-    clickOn(SignUpButton);
-
-    equals(ErrorText, "Email can't be empty");
-  });
-
-  newSpec("Shows error if empty password", ({ clickOn, enterText, equals }) => {
-    clickOn(EmailInput);
-    enterText(EmailText, "hi@test.com");
-
-    clickOn(SignUpButton);
-
-    equals(ErrorText, "Password can't be empty");
-  });
-
-  return { EmailInput, EmailText, PasswordInput, PasswordText, SignUpButton, ErrorText };
+  return { NewCardInput, NewCardText, CardsList, AddButton, PrevCardText };
 };
 
 
@@ -55,18 +47,13 @@ function App() {
   return (
     <div className="App">
       <label>
-        Email{" "}
-        <input {...props.EmailInput} />
+        New Card{" "}
+        <input {...props.NewCardInput} />
       </label>
 
-      <label>
-        Password{" "}
-        <input {...props.PasswordInput} />
-      </label>
+      <button {...props.AddButton}>Add</button>
 
-      <button {...props.SignUpButton}>Sign Up</button>
-
-      {props.ErrorText && <span>{props.ErrorText}</span>}
+      {props.CardsList.map((text, index) => <span key={index}>{text}</span>)}
     </div>
   )
 }

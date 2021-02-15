@@ -1,40 +1,47 @@
 import {useState} from "react";
 
 type SpecField = Variable | Component | Effect;
-type Variable = StringText;
+type Variable = TextVar | TextList;
 type Component = Input | Button;
-type Effect = { type: "effect"; fn: (getVal: GetValFromVariable) => void };
+type Effect = { type: "effect"; fn: <V extends Variable>(getVal: GetValFromVariable<V>) => void };
 
 type Input = { type: "input"; inputType?: HTMLInputElement["type"] };
 type Button = { type: "button" };
-type StringText = { type: "text" };
+type TextVar = { type: "text" };
+type TextList = { type: "textList" };
 
-type GetValFromVariable = (variable: Variable) => string;
+type GetValFromVariable<V extends Variable> = (variable: V) => ValFromVariable<V>;
+type ValFromVariable<V extends Variable> = V extends TextVar ? string : V extends TextList ? string[] : never;
+
+type VariableComparitor<V extends Variable> = V extends TextVar ? (string | TextVar) : V extends TextList ? (string | TextVar)[] : never;
 
 export const newInput = (opts?: { inputType?: HTMLInputElement["type"] }): Input => ({ ...opts, type: "input" });
 export const newButton = (): Button => ({ type: "button" });
-export const newText = (): StringText => ({ type: "text" });
-export const newEffect = (fn: (getVal: GetValFromVariable) => void): Effect => ({ type: "effect", fn });
+export const newText = (): TextVar => ({ type: "text" });
+export const newTextList = (): TextList => ({ type: "textList" });
+export const newEffect = (fn: <V extends Variable>(getVal: GetValFromVariable<V>) => void): Effect => ({ type: "effect", fn });
 
 type SpecFn = (args: {
   // User inputs
-  enterText: (text: StringText, example: string) => void;
+  enterText: (text: TextVar, example: string) => void;
   clickOn: (component: Component) => void;
   // Actions
   doEffect: (action: Effect) => void;
-  equals: (variable: Variable, value: string) => void;
+  equals: <V extends Variable>(variable: V, value: VariableComparitor<V>) => void;
 }) => void;
 export type NewSpec = (description: string, spec: SpecFn) => void;
 
 type SpecProps<Spec> = {
-  [K in keyof Spec]: Spec[K] extends StringText ?
-    string : Spec[K] extends Input ?
-    React.InputHTMLAttributes<HTMLInputElement> : Spec[K] extends Button ?
-    React.ButtonHTMLAttributes<HTMLButtonElement> : never;
+  [K in keyof Spec]:
+    Spec[K] extends TextVar ? string :
+    Spec[K] extends TextList ? string[] :
+    Spec[K] extends Input ? React.InputHTMLAttributes<HTMLInputElement> :
+    Spec[K] extends Button ? React.ButtonHTMLAttributes<HTMLButtonElement> :
+    never;
 }
 
 type SpecState<Spec> = {
-  [K in keyof Spec]: Spec[K] extends StringText ? string : never;
+  [K in keyof Spec]: Spec[K] extends TextVar ? string : Spec[K] extends TextList ? string[] : never;
 }
 type SpecStateWithFocus<Spec> = { state: SpecState<Spec>; focus: Component | null };
 
@@ -43,10 +50,10 @@ type SpecEvent = SpecEventUserInput | SpecEventAction | SpecEventFocus;
 type SpecEventFocus =
   | { type: "clickOn"; component: Component }
 type SpecEventUserInput =
-  | { type: "enterText"; text: StringText; example: string }
+  | { type: "enterText"; text: TextVar; example: string }
 type SpecEventAction =
   | { type: "doEffect"; action: Effect }
-  | { type: "equals"; variable: Variable; value: string }
+  | { type: "equals"; variable: Variable; value: VariableComparitor<Variable> }
 
 export function useSpec<Spec extends Record<string, SpecField>>(getSpec: (newSpec: NewSpec) => Spec): SpecProps<Spec> {
 
@@ -56,7 +63,7 @@ export function useSpec<Spec extends Record<string, SpecField>>(getSpec: (newSpe
     events[index].specEvents.push({ type: "doEffect", action });
   }
 
-  const enterText = (index: number) =>(text: StringText, example: string) => {
+  const enterText = (index: number) =>(text: TextVar, example: string) => {
     events[index].specEvents.push({ type: "enterText", text, example });
   }
 
@@ -64,7 +71,7 @@ export function useSpec<Spec extends Record<string, SpecField>>(getSpec: (newSpe
     events[index].specEvents.push({ type: "clickOn", component });
   }
 
-  const equals = (index: number) =>(variable: Variable, value: string) => {
+  const equals = (index: number) => <V extends Variable>(variable: V, value: VariableComparitor<V>) => {
     events[index].specEvents.push({ type: "equals", variable, value });
   }
 
@@ -109,7 +116,7 @@ function getInitState<Spec extends Record<string, SpecField>>(spec: Spec): SpecS
 
   Object.entries(spec).forEach(([specName, specField]) => {
     // Only state for Variable type
-    if (specField.type === "text") {
+    if (isVariable(specField)) {
       specState[specName as keyof Spec] = getStateForField(specField) as any;
     }
   });
@@ -124,15 +131,22 @@ function getInitStateWithFocus<Spec extends Record<string, SpecField>>(spec: Spe
   }
 }
 
-function getStateForField(specField: Variable) {
+function getStateForField(specField: Variable): ValFromVariable<Variable> {
   switch (specField.type) {
     case "text":
       return "";
+
+    case "textList":
+      return [];
   }
 }
 
 function getStateKeyForVariable<Spec extends Record<string, SpecField>>(variable: Variable, spec: Spec) {
-  return Object.entries(spec).find(([_, potentialSpecField]) => potentialSpecField === variable)![0];
+  const variableVals = Object.entries(spec).find(([_, potentialSpecField]) => potentialSpecField === variable);
+  if (!variableVals) {
+    throw Error(`Couldn't find variable of type ${variable.type}`)
+  }
+  return variableVals[0];
 }
 
 function getPropsForField<Spec extends Record<string, SpecField>>(
@@ -175,11 +189,29 @@ function getPropsForField<Spec extends Record<string, SpecField>>(
                       return state[varStateKey];
                     }));
                   } else if (nextEvent.type === "equals") {
+                    function lookupTextVar(textVar: TextVar): string {
+                      const varStateKey = getStateKeyForVariable(textVar, spec);
+                      return state[varStateKey] as string;
+                    }
+                    function getVariableValue(variable: string | TextVar | (string | TextVar)[]): string | string[] {
+                      return typeof variable === "string" ? variable :
+                        Array.isArray(variable) ? variable.map(getVariableValue) as string[] :
+                        lookupTextVar(variable)
+                    }
                     // We change some state on equals
                     const varStateKey = getStateKeyForVariable(nextEvent.variable, spec);
+
                     fns.push(
                       () => {
-                        setState(s => ({...s, [varStateKey]: nextEvent.value }));
+                        setState(s => {
+                          const value = getVariableValue(nextEvent.value)
+                          if (Array.isArray(s[varStateKey])) {
+                            // It's an Array operation. We need to account for existing values
+                            // TODO: more than just push at end of array
+                            return {...s, [varStateKey]: [...s[varStateKey], Array.isArray(value) ? value[value.length - 1] : value] }
+                          }
+                          return {...s, [varStateKey]: value }
+                        });
                       }
                     );
                   }
@@ -241,7 +273,7 @@ ${clashingSpecNames.join("\n")}`)
 
             possibleProps.push({
               connectedVariable,
-              value: state[varStateKey],
+              value: state[varStateKey] as string,
               onValueChange: val => {
                 setState(s => ({ ...s, [varStateKey]: val }));
               },
@@ -290,7 +322,7 @@ ${clashingSpecNames.join("\n")}`)
 
 function updateSpecState<Spec extends Record<string, SpecField>>(prevSpecState: SpecStateWithFocus<Spec>, event: SpecEvent, spec: Spec): SpecStateWithFocus<Spec> {
   switch (event.type) {
-    case "enterText":
+    case "enterText": {
       const varStateKey = getStateKeyForVariable(event.text, spec);
 
       return {
@@ -300,13 +332,50 @@ function updateSpecState<Spec extends Record<string, SpecField>>(prevSpecState: 
           [varStateKey]: event.example
         },
       }
+    }
 
-    case "clickOn":
+    case "clickOn": {
       const focussedComponent = event.component;
       return {
         ...prevSpecState,
         focus: focussedComponent
       }
+    }
+
+    case "equals": {
+      // This is duplicate of equals action lookup
+
+      function lookupTextVar(textVar: TextVar): string {
+        const varStateKey = getStateKeyForVariable(textVar, spec);
+        return prevSpecState.state[varStateKey] as string;
+      }
+      function getVariableValue(variable: string | TextVar | (string | TextVar)[]): string | string[] {
+        return typeof variable === "string" ? variable :
+          Array.isArray(variable) ? variable.map(getVariableValue) as string[] :
+          lookupTextVar(variable)
+      }
+
+      const value = getVariableValue(event.value);
+      const varStateKey = getStateKeyForVariable(event.variable, spec);
+
+      if (Array.isArray(prevSpecState.state[varStateKey])) {
+        return {
+          ...prevSpecState,
+          state: {
+            ...prevSpecState.state,
+            [varStateKey]: [...prevSpecState.state[varStateKey], value],
+          }
+        }
+      }
+
+      return {
+        ...prevSpecState,
+        state: {
+          ...prevSpecState.state,
+          [varStateKey]: value,
+        }
+      }
+    }
 
     default:
       return prevSpecState
@@ -321,16 +390,21 @@ function isUserInput(specEvent: SpecEvent): specEvent is SpecEventUserInput {
 }
 
 function isVariable(specField: SpecField): specField is Variable {
-  return specField.type === "text";
+  return specField.type === "text" || specField.type === "textList";
 }
 function isComponent(specField: SpecField): specField is Component {
   return specField.type === "input" || specField.type === "button";
 }
 
 function getSimilarityScore<Spec extends Record<string, SpecField>>(state1: SpecState<Spec>, state2: SpecState<Spec>) {
-  return Object.entries(state1).reduce((total, [fieldName, fieldVal]) => {
+  return Object.entries(state1).reduce((total, [fieldName1, fieldVal1]) => {
+    const fieldVal2 = state2[fieldName1];
+    // For arrays, check for array length
+    if (Array.isArray(fieldVal1) && Array.isArray(fieldVal2)) {
+      return fieldVal2.length === fieldVal1.length ? total + 1 : total;
+    }
     // For strings, compare if empty or not
-    if (Boolean(state2[fieldName]) === Boolean(fieldVal)) {
+    if (Boolean(fieldVal2) === Boolean(fieldVal1)) {
       return total + 1;
     }
     return total;
