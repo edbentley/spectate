@@ -1,7 +1,7 @@
 import React from 'react'
 import ReactDOM from 'react-dom'
 import './index.css'
-import App from './examples/EmailForm'
+import App from './examples/TODOApp'
 
 ReactDOM.render(
   <React.StrictMode>

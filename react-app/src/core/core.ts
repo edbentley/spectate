@@ -276,7 +276,7 @@ function updateStateAndUpdateModel<Spec extends SpecBase>(
                 actions,
                 positions: [{ specIndex, eventIndex }]
               })
-            } else if (actionsEqual(existing.actions, actions)) {
+            } else if (actionsEqual(existing.actions, actions, variables, specState)) {
               // Actions are equivalent, so just add it to positions
               existing.positions.push({ specIndex, eventIndex });
             } else {

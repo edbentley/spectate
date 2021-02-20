@@ -1,5 +1,7 @@
 import { Component } from "./components";
 import { Effect } from "./effects";
+import { SpecBase } from "./spec";
+import { getValueFromState, SpecState, stateFieldsSimilar } from "./state";
 import { TextVar, Variable, VariableComparitor } from "./variables";
 
 export type Events = SpecEvent[][];
@@ -13,7 +15,12 @@ export type SpecEventAction =
   | { type: "equals"; variable: Variable; value: VariableComparitor<Variable> }
 
 
-export function actionsEqual(actionsA: SpecEventAction[], actionsB: SpecEventAction[]): boolean {
+export function actionsEqual<Spec extends SpecBase>(
+  actionsA: SpecEventAction[],
+  actionsB: SpecEventAction[],
+  variables: { name: string; variable: Variable }[],
+  specState: SpecState<Spec>
+): boolean {
   if (actionsA.length !== actionsB.length) return false;
 
   for (let i = 0; i < actionsA.length; i++) {
@@ -31,9 +38,19 @@ export function actionsEqual(actionsA: SpecEventAction[], actionsB: SpecEventAct
       return false;
     }
 
-    if (actionA.type === "equals" && actionB.type === "equals" &&
-      (actionA.variable !== actionB.variable || actionA.value !== actionB.value)) {
-      return false;
+    if (actionA.type === "equals" && actionB.type === "equals") {
+      if (actionA.variable !== actionB.variable) {
+        return false;
+      }
+
+      // Check if value is the same (i.e. similarity score of 1).
+
+      const actionAValue = getValueFromState(actionA.value, variables, specState);
+      const actionBValue = getValueFromState(actionB.value, variables, specState);
+
+      if (!stateFieldsSimilar(actionAValue, actionBValue)) {
+        return false;
+      }
     }
   }
 

@@ -63,7 +63,7 @@ export function getSimilarityScore<Spec extends SpecBase>(stateA: SpecState<Spec
 
 type StateField = string | string[];
 
-function stateFieldsSimilar(fieldA: StateField, fieldB: StateField): boolean {
+export function stateFieldsSimilar(fieldA: StateField, fieldB: StateField): boolean {
   // For text arrays, only consider the array length.
   if (Array.isArray(fieldA) && Array.isArray(fieldB)) {
     return fieldB.length === fieldA.length;
