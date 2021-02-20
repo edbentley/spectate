@@ -1,6 +1,9 @@
 import React from 'react'
 import './App.css'
-import { useSpec, newInput, newText, newButton, NewSpec, newTextList } from './useSpec'
+import { useSpec } from "../react";
+import { newInput, newButton } from '../core/components'
+import { newText, newTextList } from '../core/variables'
+import { NewSpec } from '../core/spec'
 
 const mySpec = (newSpec: NewSpec) => {
   const NewCardInput = newInput();

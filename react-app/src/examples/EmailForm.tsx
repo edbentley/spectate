@@ -1,6 +1,11 @@
 import React from 'react'
 import './App.css'
-import { useSpec, newInput, newText, newButton, NewSpec, newEffect } from './useSpec'
+import { useSpec } from "../react";
+import { newInput, newButton } from '../core/components'
+import { newText } from '../core/variables'
+import { NewSpec } from '../core/spec'
+import { newEffect } from '../core/effects';
+
 
 const mySpec = (newSpec: NewSpec) => {
   const EmailInput = newInput();
