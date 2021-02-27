@@ -1,4 +1,4 @@
-import { Component } from "./components";
+import { Component, ComponentList } from "./components";
 import { Effect } from "./effects";
 import { SpecBase } from "./spec";
 import { getValueFromState, SpecState, stateFieldsSimilar } from "./state";
@@ -8,11 +8,14 @@ export type Events = SpecEvent[][];
 export type SpecEvent = SpecEventUserInput | SpecEventAction | SpecEventClick;
 export type SpecEventClick =
   | { type: "clickOn"; component: Component }
+  | { type: "clickOnList"; component: ComponentList<Component, Variable>; index: number }
 export type SpecEventUserInput =
   | { type: "enterText"; text: TextVar; example: string }
 export type SpecEventAction =
   | { type: "doEffect"; effect: Effect }
   | { type: "equals"; variable: Variable; value: VariableComparitor<Variable> }
+
+export type EventContext = { index?: number };
 
 
 export function actionsEqual<Spec extends SpecBase>(

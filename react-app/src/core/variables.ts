@@ -1,20 +1,23 @@
 
-export type Variable = TextVar | TextList;
+export type Variable = TextVar | VariableList<Variable>;
+export interface VariableList<V extends Variable> { type: "variableList"; variable: V };
 export type TextVar = { type: "text" };
-export type TextList = { type: "textList" };
 
 export const newText = (): TextVar => ({ type: "text" });
-export const newTextList = (): TextList => ({ type: "textList" });
+export const newVarList = <V extends Variable>(variable: V): VariableList<V> => ({ type: "variableList", variable });
 
 export type VariableComparitor<V extends Variable> =
   V extends TextVar ? (string | TextVar) :
-  V extends TextList ? (string | TextVar)[] :
+  V extends VariableList<infer InnerVar> ? VariableComparitor<InnerVar>[] :
   never;
 
-export type VariableValue<V extends Variable> = V extends TextVar ? string : V extends TextList ? string[] : never;
+export type VariableValue<V extends Variable> =
+  V extends TextVar ? string :
+  V extends VariableList<infer InnerVar> ? VariableValue<InnerVar>[] :
+  never;
 
 export function isVariable(specField: { type: string }): specField is Variable {
-  return specField.type === "text" || specField.type === "textList";
+  return specField.type === "text" || specField.type === "variableList";
 }
 
 export function getInitValue(variable: Variable): VariableValue<Variable> {
@@ -22,7 +25,7 @@ export function getInitValue(variable: Variable): VariableValue<Variable> {
     case "text":
       return "";
 
-    case "textList":
+    case "variableList":
       return [];
   }
 }

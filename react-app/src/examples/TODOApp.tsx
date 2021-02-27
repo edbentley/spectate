@@ -1,20 +1,30 @@
 import React from 'react'
 import './App.css'
 import { useSpec } from "../react";
-import { newInput, newButton } from '../core/components'
-import { newText, newTextList } from '../core/variables'
+import { newInput, newButton, newComponentList } from '../core/components'
+import { newText, newVarList } from '../core/variables'
 import { NewSpec } from '../core/spec'
+import { newEffect } from '../core/effects';
 
 const mySpec = (newSpec: NewSpec) => {
   const NewCardInput = newInput();
   const NewCardText = newText();
   const PrevCardText = newText();
 
-  const CardsList = newTextList();
+  const CardsList = newVarList(newText());
+
+  const RemoveButtonsList = newComponentList(newButton(), CardsList);
 
   const AddButton = newButton();
 
-  newSpec("Can create multiple TODO cards", ({ clickOn, enterText, doEffect, equals }) => {
+  const LogCard = newEffect((getVal, { index }) => {
+    // Was not the result of a component list
+    if (index === undefined) return;
+
+    console.log("Removing", getVal(CardsList)[index]);
+  });
+
+  newSpec("Can create multiple TODO cards", ({ clickOn, clickOnIndex, enterText, equals, doEffect }) => {
     clickOn(NewCardInput);
     enterText(NewCardText, "Wash the dishes");
 
@@ -38,14 +48,25 @@ const mySpec = (newSpec: NewSpec) => {
     equals(CardsList, [PrevCardText, NewCardText]);
 
     equals(NewCardText, "");
+
+
+    // Remove a card
+
+    clickOnIndex(RemoveButtonsList, 1);
+
+    // Log the value on the card
+    doEffect(LogCard);
+
+    equals(CardsList, [PrevCardText]);
   });
 
-  return { NewCardInput, NewCardText, CardsList, AddButton, PrevCardText };
+  return { NewCardInput, NewCardText, CardsList, AddButton, PrevCardText, RemoveButtonsList };
 };
 
 
 function App() {
   const props = useSpec(mySpec)
+
 
   return (
     <div className="App">
@@ -56,7 +77,13 @@ function App() {
 
       <button {...props.AddButton}>Add</button>
 
-      {props.CardsList.map((text, index) => <span key={index}>{text}</span>)}
+      {props.CardsList.map((text, index) => {
+        const buttonProps = props.RemoveButtonsList(index);
+        return <div key={index}>
+          <span>{text}</span>
+          <button {...buttonProps}>X</button>
+        </div>
+      })}
     </div>
   )
 }

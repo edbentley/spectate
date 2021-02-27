@@ -1,18 +1,19 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { NewSpec, SpecBase } from "../core/spec";
+import { NewSpec, SpecBase, SpecField } from "../core/spec";
 import { SpecComponentHandlers, processSpec, getComponentHandlers } from "../core/core";
 import { getInitSpecState, SpecState } from "../core/state";
-import { isVariable, TextList, TextVar } from "../core/variables";
-import { Input, Button, Component, isComponent } from "../core/components";
+import { isVariable, TextVar, Variable, VariableList, VariableValue } from "../core/variables";
+import { Input, Button, Component, isComponent, ComponentList } from "../core/components";
 
 export type SpecProps<Spec> = {
-  [K in keyof Spec]:
-    Spec[K] extends TextVar ? string :
-    Spec[K] extends TextList ? string[] :
-    Spec[K] extends Input ? React.InputHTMLAttributes<HTMLInputElement> :
-    Spec[K] extends Button ? React.ButtonHTMLAttributes<HTMLButtonElement> :
-    never;
+  [K in keyof Spec]: SpecFieldProps<Spec[K]>;
 }
+type SpecFieldProps<Field> =
+    Field extends Variable ? VariableValue<Field> :
+    Field extends Input ? React.InputHTMLAttributes<HTMLInputElement> :
+    Field extends Button ? React.ButtonHTMLAttributes<HTMLButtonElement> :
+    Field extends ComponentList<infer Component, infer Variable> ? (index: number) => SpecFieldProps<Component>[] :
+    never;
 
 /**
  * Get the spec for app.
@@ -49,12 +50,14 @@ function getProps<Spec extends SpecBase>(
   return specProps as SpecProps<Spec>;
 }
 
+type HTMLElementProps = React.ButtonHTMLAttributes<HTMLButtonElement> | React.InputHTMLAttributes<HTMLInputElement>;
+
 function getComponentProps<Spec extends SpecBase>(
   name: string,
   component: Component,
   specState: SpecState<Spec>,
   componentHandlers: SpecComponentHandlers<Spec>,
-): React.ButtonHTMLAttributes<HTMLButtonElement> | React.InputHTMLAttributes<HTMLInputElement> {
+): HTMLElementProps | ((index: number) => HTMLElementProps) {
   switch (component.type) {
     case "button":
       const buttonHandler = componentHandlers.buttons[name](specState);
@@ -71,7 +74,7 @@ function getComponentProps<Spec extends SpecBase>(
       const connectedVarName = inputHandler.connectedVariableName;
 
       const inputProps: React.InputHTMLAttributes<HTMLInputElement> = {
-        value: connectedVarName !== null ? specState.state[connectedVarName] : "",
+        value: connectedVarName !== null ? specState.state[connectedVarName] as string : "",
         onChange: event => {
           const newValue = event.target.value;
           inputHandler.onChange(newValue);
@@ -79,6 +82,35 @@ function getComponentProps<Spec extends SpecBase>(
         type: component.inputType
       }
       return inputProps;
+
+    case "componentList":
+      const componentType = component.component.type;
+      const handler = componentHandlers.lists[name](specState);
+
+      if (componentType === "button" && "onClick" in handler) {
+
+        return (index: number) => ({
+          onClick: () => handler.onClick(index)
+        });
+
+      } else if (componentType === "input" && "onChange" in handler) {
+
+        const connectedValues = specState.state[handler.connectedVariableName] as string[];
+
+        return (index: number) => {
+          const inputProps: React.InputHTMLAttributes<HTMLInputElement> = {
+            value: connectedValues[index] || "",
+            onChange: (event) => {
+              const newValue = event.target.value;
+              handler.onChange(newValue, index);
+            }
+          }
+          return inputProps;
+        };
+      }
+
+      throw Error(`Couldn't find component list handlers for ${name}`);
+
   }
 
 }

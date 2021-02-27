@@ -1,17 +1,22 @@
-import { Button, Component, getComponentName, Input, isComponent } from "./components";
+import { Button, Component, ComponentList, getComponentName, Input, isComponent } from "./components";
 import { NewSpec, SpecBase } from "./spec";
 import { getInitSpecState, SpecState, statesEqual, getSimilarityScore, getValueFromState } from "./state";
-import { actionsEqual, Events, getNextActions, SpecEvent, SpecEventAction } from "./events"
+import { actionsEqual, EventContext, Events, getNextActions, SpecEvent, SpecEventAction } from "./events"
 import { getVariableName, isVariable, TextVar, Variable, VariableComparitor, VariableValue } from "./variables";
 import { Effect } from "./effects";
 
 
-export type SpecComponentHandlers<Spec extends SpecBase> = {
+export interface SpecComponentHandlers<Spec extends SpecBase> {
   // Record of key: button name, val: onClick function determined using similarity scores
   buttons: Record<string, (appState: SpecState<Spec>) => { onClick: () => void }>;
 
   // Record of key: input name, val: onChange function determined using similarity scores
   inputs: Record<string, (appState: SpecState<Spec>) => { connectedVariableName: null | string; onChange: (value: string) => void }>,
+
+  // Record of key: list name, val: button or input fields with index passed in
+  lists: Record<string, (appState: SpecState<Spec>) =>
+    | { onClick: (index: number) => void }
+    | { connectedVariableName: string; onChange: (value: string, index: number) => void }>;
 }
 
 
@@ -42,8 +47,17 @@ type EventsModel<Spec extends SpecBase> = {
     // Can be multiple positions if fields above are the same in multiple specs
     positions: { specIndex: number; eventIndex: number }[];
   }[]>;
-  // userInputEvents: { state: SpecState<Spec>; event: SpecEventUserInput; specDescription: string }[];
-  // actionEvents: { state: SpecState<Spec>; event: SpecEventAction; specDescription: string }[];
+
+  // Key is list name
+  componentListEvents: Record<string, {
+    // State at this point
+    state: SpecState<Spec>;
+    // Actions following click
+    // An error is thrown if button and state are the same but actions different
+    actions: SpecEventAction[];
+    // Can be multiple positions if fields above are the same in multiple specs
+    positions: { specIndex: number; eventIndex: number }[];
+  }[]>; // TODO: and input list
 }
 
 export function processSpec<Spec extends SpecBase>(
@@ -56,12 +70,16 @@ export function processSpec<Spec extends SpecBase>(
     events[index].push({ type: "doEffect", effect });
   }
 
-  const enterText = (index: number) =>(text: TextVar, example: string) => {
+  const enterText = (index: number) => (text: TextVar, example: string) => {
     events[index].push({ type: "enterText", text, example });
   }
 
-  const clickOn = (index: number) =>(component: Component) => {
+  const clickOn = (index: number) => (component: Component) => {
     events[index].push({ type: "clickOn", component });
+  }
+
+  const clickOnIndex = (eventIndex: number) => (componentList: ComponentList<Component, Variable>, componentIndex: number) => {
+    events[eventIndex].push({ type: "clickOnList", component: componentList, index: componentIndex });
   }
 
   const equals = (index: number) => <V extends Variable>(variable: V, value: VariableComparitor<V>) => {
@@ -78,6 +96,7 @@ export function processSpec<Spec extends SpecBase>(
       doEffect: doEffect(index),
       enterText: enterText(index),
       clickOn: clickOn(index),
+      clickOnIndex: clickOnIndex(index),
       equals: equals(index)
     });
   }
@@ -113,6 +132,7 @@ export function getComponentHandlers<Spec extends SpecBase>(
 
   const buttons: SpecComponentHandlers<Spec>["buttons"] = {};
   const inputs: SpecComponentHandlers<Spec>["inputs"] = {};
+  const lists: SpecComponentHandlers<Spec>["lists"] = {};
 
   components.forEach(({ name, component }) => {
     if (component.type === "button") {
@@ -130,7 +150,7 @@ export function getComponentHandlers<Spec extends SpecBase>(
 
           // Then run that event's actions
           const nextAppState = bestEvent.actions.reduce((currState, action) =>
-            handleAction(action, currState, variables, null),
+            handleAction(action, currState, variables, null, {}),
             appState
           )
 
@@ -163,12 +183,57 @@ export function getComponentHandlers<Spec extends SpecBase>(
           },
         }
       }
+    } else if (component.type === "componentList") {
+      const connectedVariableName = getVariableName(variables, component.connectedVariable);
+
+      lists[name] = (appState) => {
+        const componentType = component.component.type;
+
+        // TODO: get relevant events with appState
+
+
+        if (componentType === "input") {
+          // TODO
+          return {
+            connectedVariableName,
+            onChange: (val, index) => null
+          }
+        }
+        if (componentType === "button") {
+          return {
+            onClick: (index) => {
+              // State Needed?
+              // console.log("Clicked on field", appState.state[connectedVariableName][index])
+
+              // Repeat of button
+              const relevantEvents = eventsModel.componentListEvents[name];
+
+              const bestEvent = getRelevantEvent(relevantEvents, appState);
+
+              if (bestEvent === null) {
+                return;
+              }
+
+              const nextAppState = bestEvent.actions.reduce((currState, action) =>
+                handleAction(action, currState, variables, null, { index }),
+                appState
+              )
+
+              // Then update with resulting event's state changes
+              updateSpecState(() => nextAppState);
+            }
+          }
+        }
+
+        throw Error(`Invalid component type ${componentType}`)
+      }
     }
   })
 
   return {
     buttons,
     inputs,
+    lists,
   }
 }
 
@@ -207,6 +272,7 @@ function getEventsModel<Spec extends SpecBase>(
 ): EventsModel<Spec> {
   const buttonEvents: EventsModel<Spec>["buttonEvents"] = {};
   const inputEvents: EventsModel<Spec>["inputEvents"] = {};
+  const componentListEvents: EventsModel<Spec>["componentListEvents"] = {};
 
   events.forEach((specEvents, specIndex) => {
 
@@ -218,6 +284,7 @@ function getEventsModel<Spec extends SpecBase>(
       specEvents,
       buttonEvents,
       inputEvents,
+      componentListEvents,
       components,
       variables,
     ), getInitSpecState(spec));
@@ -226,7 +293,8 @@ function getEventsModel<Spec extends SpecBase>(
 
   return {
     buttonEvents,
-    inputEvents
+    inputEvents,
+    componentListEvents
   }
 }
 
@@ -241,6 +309,7 @@ function updateStateAndUpdateModel<Spec extends SpecBase>(
   specEvents: SpecEvent[],
   buttonEvents: EventsModel<Spec>["buttonEvents"],
   inputEvents: EventsModel<Spec>["inputEvents"],
+  componentListEvents: EventsModel<Spec>["componentListEvents"],
   components: { name: string; component: Component }[],
   variables: { name: string; variable: Variable }[]
 ): SpecState<Spec> {
@@ -301,14 +370,75 @@ function updateStateAndUpdateModel<Spec extends SpecBase>(
             ...specState,
             focus: event.component
           }
+
+
+        case "componentList":
+          // No-op
+          return specState;
       }
+
+    case "clickOnList":
+      switch (event.component.component.type) {
+        case "button":
+          // We need to add this event to buttonEvents
+
+          const actions = getNextActions(specEvents, eventIndex);
+
+          const listName = getComponentName(components, event.component);
+          const existingListEvents = componentListEvents[listName];
+
+          if (!existingListEvents) {
+            // First event state for this list
+            componentListEvents[listName] = [
+              {
+                state: specState,
+                actions,
+                positions: [{ specIndex, eventIndex }]
+              }
+            ];
+          } else {
+            const existing = existingListEvents.find(listEvent => statesEqual(listEvent.state, specState));
+
+            if (!existing) {
+              // Not first event state for this button, but unique state
+              existingListEvents.push({
+                state: specState,
+                actions,
+                positions: [{ specIndex, eventIndex }]
+              })
+            } else if (actionsEqual(existing.actions, actions, variables, specState)) {
+              // Actions are equivalent, so just add it to positions
+              existing.positions.push({ specIndex, eventIndex });
+            } else {
+              const conflictPos = existing.positions[0];
+              throw Error(
+                `Conflicting actions for the same state for component list ${listName} in specs ${conflictPos.specIndex}:${conflictPos.eventIndex} and ${specIndex}:${eventIndex}`
+              )
+            }
+
+          }
+
+          // Also update the focus
+          return {
+            ...specState,
+            focus: event.component
+          }
+
+
+        case "input":
+          // TODO
+          return {
+            ...specState,
+            focus: event.component
+          }
+        }
 
     case "doEffect":
       // State doesn't change. We don't to run side effects yet.
       return specState;
 
     case "equals":
-      return handleAction(event, specState, variables, { specIndex, eventIndex })
+      return handleAction(event, specState, variables, { specIndex, eventIndex }, {})
 
     case "enterText":
       const focussedComponent = specState.focus;
@@ -358,7 +488,7 @@ function updateStateAndUpdateModel<Spec extends SpecBase>(
       }
 
       // Entering text to input with connected var is equivalent to setting var with equals
-      return handleAction({ type: "equals", variable: event.text, value: event.example }, specState, variables, { specIndex, eventIndex })
+      return handleAction({ type: "equals", variable: event.text, value: event.example }, specState, variables, { specIndex, eventIndex }, {})
   }
 }
 
@@ -370,7 +500,8 @@ function handleAction<Spec extends SpecBase>(
   action: SpecEventAction,
   specState: SpecState<Spec>,
   variables: { name: string; variable: Variable }[],
-  position: null | { specIndex: number; eventIndex: number }
+  position: null | { specIndex: number; eventIndex: number },
+  eventContext: EventContext
 ): SpecState<Spec> {
   const posString = position ? ` at ${position.specIndex}:${position.eventIndex}` : "";
 
@@ -380,7 +511,7 @@ function handleAction<Spec extends SpecBase>(
         const variableName = getVariableName(variables, variable);
         return specState.state[variableName] as unknown as VariableValue<typeof variable>;
       }
-      action.effect.fn(getVal);
+      action.effect.fn(getVal, eventContext);
       return specState;
 
     case "equals":
@@ -455,9 +586,25 @@ function handleAction<Spec extends SpecBase>(
           }
         }
 
-        if (newValue.length === prevValue.length - 1) {
-          // We removed from array
+        if (newValue.length < prevValue.length) {
+
+          // If we don't have context about the index, it won't matter since we're only comparing array lengths
+          const index = eventContext.index ?? 0;
+
+          if (newValue.length === prevValue.length - 1) {
+            return {
+              ...specState,
+              state: {
+                ...specState.state,
+                [variableName]: [
+                  ...prevValue.slice(0, index),
+                  ...prevValue.slice(index + 1)
+                ],
+              }
+            }
+          }
           throw Error(`TODO${posString}`)
+
         }
 
         throw Error(`Invalid array operation${posString}. You can only add or remove one element from the beginning or end of array`);

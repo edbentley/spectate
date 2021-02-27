@@ -1,18 +1,18 @@
 import { Component } from "./components";
 import { SpecBase } from "./spec";
-import { TextVar, TextList, isVariable, Variable, getInitValue } from "./variables";
+import { TextVar, isVariable, Variable, getInitValue, VariableValue, VariableComparitor } from "./variables";
 
 export type SpecState<Spec> = { state: SpecStateVars<Spec>; focus: Component | null };;
 
 type SpecStateVars<Spec> = {
-  [K in keyof Spec]: Spec[K] extends TextVar ? string : Spec[K] extends TextList ? string[] : never;
+  [K in keyof Spec]: Spec[K] extends Variable ? VariableValue<Spec[K]> : never;
 }
 
 /**
  * Recursively lookup a variable's primitive value within state
  */
 export function getValueFromState<Spec extends SpecBase>(
-  variable: string | TextVar | (string | TextVar)[],
+  variable: Variable | VariableComparitor<Variable>,
   variables: { name: string; variable: Variable }[],
   specState: SpecState<Spec>
 ): string | string[] {
@@ -24,7 +24,7 @@ export function getValueFromState<Spec extends SpecBase>(
 
   const lookupVariable = variables.find(v => v.variable === variable)!;
 
-  return specState.state[lookupVariable.name];
+  return specState.state[lookupVariable.name] as string;
 }
 
 export function getInitSpecState<Spec extends SpecBase>(spec: Spec): SpecState<Spec> {
@@ -61,7 +61,7 @@ export function getSimilarityScore<Spec extends SpecBase>(stateA: SpecState<Spec
   }, 0);
 }
 
-type StateField = string | string[];
+type StateField = string | unknown[];
 
 export function stateFieldsSimilar(fieldA: StateField, fieldB: StateField): boolean {
   // For text arrays, only consider the array length.
