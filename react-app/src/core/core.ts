@@ -2,7 +2,7 @@ import { Button, Component, ComponentList, getComponentName, Input, isComponent 
 import { NewSpec, SpecBase } from "./spec";
 import { getInitSpecState, SpecState, statesEqual, getSimilarityScore, getValueFromState } from "./state";
 import { actionsEqual, EventContext, Events, getNextActions, SpecEvent, SpecEventAction } from "./events"
-import { getVariableName, isVariable, TextVar, Variable, VariableComparitor, VariableValue } from "./variables";
+import { compareBehaviours, getVariableName, isVariable, ListAddBehaviour, ListBehaviours, ListRemoveBehaviour, TextVar, Variable, VariableComparitor, VariableList, VariableValue } from "./variables";
 import { Effect } from "./effects";
 
 
@@ -48,7 +48,7 @@ type EventsModel<Spec extends SpecBase> = {
     positions: { specIndex: number; eventIndex: number }[];
   }[]>;
 
-  // Key is list name
+  // Key is component list name
   componentListEvents: Record<string, {
     // State at this point
     state: SpecState<Spec>;
@@ -58,6 +58,9 @@ type EventsModel<Spec extends SpecBase> = {
     // Can be multiple positions if fields above are the same in multiple specs
     positions: { specIndex: number; eventIndex: number }[];
   }[]>; // TODO: and input list
+
+  // Key is variable list name
+  variableListBehaviour: Record<string, ListBehaviours>;
 }
 
 export function processSpec<Spec extends SpecBase>(
@@ -149,8 +152,18 @@ export function getComponentHandlers<Spec extends SpecBase>(
           }
 
           // Then run that event's actions
-          const nextAppState = bestEvent.actions.reduce((currState, action) =>
-            handleAction(action, currState, variables, null, {}),
+          const nextAppState = bestEvent.actions.reduce((currState, action) => {
+              if (action.type === "equals" && action.variable.type === "variableList") {
+                const behaviour = eventsModel.variableListBehaviour[getVariableName(variables, action.variable)];
+
+                // These are the final behaviours
+                const addBehaviour = [...behaviour.add][0];
+                const removeBehaviour = [...behaviour.remove][0];
+
+                return handleAction(action, currState, variables, null, {}, { add: addBehaviour, remove: removeBehaviour }).specState
+              }
+              return handleAction(action, currState, variables, null, {}).specState
+            },
             appState
           )
 
@@ -202,11 +215,14 @@ export function getComponentHandlers<Spec extends SpecBase>(
         if (componentType === "button") {
           return {
             onClick: (index) => {
-              // State Needed?
-              // console.log("Clicked on field", appState.state[connectedVariableName][index])
-
               // Repeat of button
               const relevantEvents = eventsModel.componentListEvents[name];
+
+              const behaviour = eventsModel.variableListBehaviour[connectedVariableName];
+
+              // These are the final behaviours
+              const addBehaviour = [...behaviour.add][0];
+              const removeBehaviour = [...behaviour.remove][0];
 
               const bestEvent = getRelevantEvent(relevantEvents, appState);
 
@@ -215,7 +231,7 @@ export function getComponentHandlers<Spec extends SpecBase>(
               }
 
               const nextAppState = bestEvent.actions.reduce((currState, action) =>
-                handleAction(action, currState, variables, null, { index }),
+                handleAction(action, currState, variables, null, { index }, { add: addBehaviour, remove: removeBehaviour }).specState,
                 appState
               )
 
@@ -228,7 +244,7 @@ export function getComponentHandlers<Spec extends SpecBase>(
         throw Error(`Invalid component type ${componentType}`)
       }
     }
-  })
+  });
 
   return {
     buttons,
@@ -273,30 +289,54 @@ function getEventsModel<Spec extends SpecBase>(
   const buttonEvents: EventsModel<Spec>["buttonEvents"] = {};
   const inputEvents: EventsModel<Spec>["inputEvents"] = {};
   const componentListEvents: EventsModel<Spec>["componentListEvents"] = {};
+  const variableListBehaviour: EventsModel<Spec>["variableListBehaviour"] = {};
 
   events.forEach((specEvents, specIndex) => {
 
-    specEvents.reduce((specState, event, eventIndex) => updateStateAndUpdateModel(
-      event,
-      eventIndex,
-      specIndex,
-      specState,
-      specEvents,
-      buttonEvents,
-      inputEvents,
-      componentListEvents,
-      components,
-      variables,
-    ), getInitSpecState(spec));
+    specEvents.reduce(({specState: prevSpecState, listContext: prevListContext}, event, eventIndex) => {
+        const {specState, listContext, replacedEvent } = updateStateAndUpdateModel(
+          event,
+          eventIndex,
+          specIndex,
+          prevSpecState,
+          specEvents,
+          buttonEvents,
+          inputEvents,
+          componentListEvents,
+          variableListBehaviour,
+          components,
+          variables,
+          prevListContext
+        )
+        if (replacedEvent && event.type === "equals" && replacedEvent.type === "equals") {
+          // We're going to brutally mutate this. Clean up later! (TODO)
+          event.behaviour = replacedEvent.behaviour;
+        }
+        return { specState, listContext }
+      },
+      { specState: getInitSpecState(spec), listContext: null as ListContext }
+    );
+  });
 
-  })
+  Object.entries(variableListBehaviour).forEach(([name, behaviour]) => {
+    if (behaviour.add.size !== 1) {
+      const options = [...behaviour.add].join(" or ");
+      console.warn(`Couldn't determine exact add to array behaviour for ${name} (could be both ${options}), try adding more tests cases to clarify.`);
+    } else if (behaviour.remove.size !== 1) {
+      const options = [...behaviour.remove].join(" or ");
+      console.warn(`Couldn't determine exact remove from array behaviour for ${name} (could be both ${options}), try adding more tests cases to clarify.`);
+    }
+  });
 
   return {
     buttonEvents,
     inputEvents,
-    componentListEvents
+    componentListEvents,
+    variableListBehaviour
   }
 }
+
+type ListContext = null | { variable: VariableList<Variable>; index: number };
 
 /**
  * Get next state from event. Mutates buttonEvents as it parses events.
@@ -310,9 +350,11 @@ function updateStateAndUpdateModel<Spec extends SpecBase>(
   buttonEvents: EventsModel<Spec>["buttonEvents"],
   inputEvents: EventsModel<Spec>["inputEvents"],
   componentListEvents: EventsModel<Spec>["componentListEvents"],
+  variableListBehaviour: EventsModel<Spec>["variableListBehaviour"],
   components: { name: string; component: Component }[],
-  variables: { name: string; variable: Variable }[]
-): SpecState<Spec> {
+  variables: { name: string; variable: Variable }[],
+  listContext: ListContext
+): { specState: SpecState<Spec>; listContext: ListContext; replacedEvent?: SpecEvent  } {
   switch (event.type) {
     case "clickOn":
       switch (event.component.type) {
@@ -335,17 +377,19 @@ function updateStateAndUpdateModel<Spec extends SpecBase>(
               }
             ];
           } else {
-            const existing = existingButtonEvents.find(buttonEvent => statesEqual(buttonEvent.state, specState));
+            const existing = existingButtonEvents.find(
+              buttonEvent => statesEqual(buttonEvent.state, specState) || actionsEqual(buttonEvent.actions, actions, variables, specState, true)
+            );
 
             if (!existing) {
-              // Not first event state for this button, but unique state
+              // Not first event state for this button, but unique state and not equals actions
               existingButtonEvents.push({
                 state: specState,
                 button: event.component,
                 actions,
                 positions: [{ specIndex, eventIndex }]
               })
-            } else if (actionsEqual(existing.actions, actions, variables, specState)) {
+            } else if (actionsEqual(existing.actions, actions, variables, specState, false)) {
               // Actions are equivalent, so just add it to positions
               existing.positions.push({ specIndex, eventIndex });
             } else {
@@ -359,22 +403,28 @@ function updateStateAndUpdateModel<Spec extends SpecBase>(
 
           // Also update the focus
           return {
-            ...specState,
-            focus: event.component
+            specState: {
+              ...specState,
+              focus: event.component
+            },
+            listContext: null
           }
 
 
         case "input":
           // Only update focus
           return {
-            ...specState,
-            focus: event.component
+            specState: {
+              ...specState,
+              focus: event.component
+            },
+            listContext: null
           }
 
 
         case "componentList":
           // No-op
-          return specState;
+          return { specState, listContext };
       }
 
     case "clickOnList":
@@ -395,9 +445,11 @@ function updateStateAndUpdateModel<Spec extends SpecBase>(
                 actions,
                 positions: [{ specIndex, eventIndex }]
               }
-            ];
+            ]
           } else {
-            const existing = existingListEvents.find(listEvent => statesEqual(listEvent.state, specState));
+            const existing = existingListEvents.find(
+              listEvent => statesEqual(listEvent.state, specState) || actionsEqual(listEvent.actions, actions, variables, specState, true)
+            );
 
             if (!existing) {
               // Not first event state for this button, but unique state
@@ -406,7 +458,7 @@ function updateStateAndUpdateModel<Spec extends SpecBase>(
                 actions,
                 positions: [{ specIndex, eventIndex }]
               })
-            } else if (actionsEqual(existing.actions, actions, variables, specState)) {
+            } else if (actionsEqual(existing.actions, actions, variables, specState, false)) {
               // Actions are equivalent, so just add it to positions
               existing.positions.push({ specIndex, eventIndex });
             } else {
@@ -420,31 +472,80 @@ function updateStateAndUpdateModel<Spec extends SpecBase>(
 
           // Also update the focus
           return {
-            ...specState,
-            focus: event.component
+            specState: {
+              ...specState,
+              focus: event.component
+            },
+            listContext: { index: event.index, variable: event.component.connectedVariable }
           }
 
 
         case "input":
           // TODO
           return {
-            ...specState,
-            focus: event.component
+            specState: {
+              ...specState,
+              focus: event.component
+            },
+            listContext
           }
         }
 
     case "doEffect":
       // State doesn't change. We don't to run side effects yet.
-      return specState;
+      return { specState, listContext };
 
     case "equals":
-      return handleAction(event, specState, variables, { specIndex, eventIndex }, {})
+      const contextIndex = listContext && listContext.variable === event.variable ? listContext.index : undefined
+      const { specState: newState, listBehaviours } = handleAction(event, specState, variables, { specIndex, eventIndex }, { index: contextIndex })
+
+      if (listBehaviours) {
+        const { name } = listBehaviours;
+
+        if (!variableListBehaviour[name]) {
+          variableListBehaviour[name] = { add: new Set(), remove: new Set() };
+        }
+
+        if (listBehaviours.type === "add") {
+          const addBehaviours = compareBehaviours(
+            variableListBehaviour[name].add,
+            listBehaviours.behaviours,
+            name
+          );
+          variableListBehaviour[name].add = addBehaviours;
+
+          return { specState: newState, listContext, replacedEvent: {
+            ...event,
+            behaviour: {
+              type: "shouldAdd",
+              listEqualsVar: listBehaviours.listEqualsVar
+            }
+          } };
+
+        } else if (listBehaviours.type === "remove") {
+          const removeBehaviours = compareBehaviours(
+            variableListBehaviour[name].remove,
+            listBehaviours.behaviours,
+            name
+          );
+          variableListBehaviour[name].remove = removeBehaviours;
+
+          return { specState: newState, listContext, replacedEvent: {
+            ...event,
+            behaviour: {
+              type: "shouldRemove",
+            }
+          } };
+        }
+      }
+
+      return { specState: newState, listContext };
 
     case "enterText":
       const focussedComponent = specState.focus;
 
       if (focussedComponent === null || focussedComponent.type !== "input") {
-        return specState;
+        return { specState, listContext };
       }
 
       // We need to add this event to inputEvents
@@ -465,7 +566,9 @@ function updateStateAndUpdateModel<Spec extends SpecBase>(
           }
         ];
       } else {
-        const existing = existingInputEvents.find(inputEvent => statesEqual(inputEvent.state, specState));
+        const existing = existingInputEvents.find(
+          inputEvent => statesEqual(inputEvent.state, specState) || inputEvent.connectedVariableName === connectedVariableName
+        );
 
         if (!existing) {
           // Not first event state for this input, but unique state
@@ -488,10 +591,15 @@ function updateStateAndUpdateModel<Spec extends SpecBase>(
       }
 
       // Entering text to input with connected var is equivalent to setting var with equals
-      return handleAction({ type: "equals", variable: event.text, value: event.example }, specState, variables, { specIndex, eventIndex }, {})
+      return {
+        specState: handleAction({ type: "equals", variable: event.text, value: event.example }, specState, variables, { specIndex, eventIndex }, {}).specState,
+        listContext,
+      }
   }
 }
 
+type ListBehaviourAddResult = { type: "add"; behaviours: Set<ListAddBehaviour>; name: string; listEqualsVar: VariableComparitor<Variable> };
+type ListBehaviourRemoveResult = { type: "remove"; behaviours: Set<ListRemoveBehaviour>; name: string; index?: number };
 
 /**
  * Returns next state based on action. May produce side effects from actions.
@@ -500,9 +608,11 @@ function handleAction<Spec extends SpecBase>(
   action: SpecEventAction,
   specState: SpecState<Spec>,
   variables: { name: string; variable: Variable }[],
+  // Only for running through specs
   position: null | { specIndex: number; eventIndex: number },
-  eventContext: EventContext
-): SpecState<Spec> {
+  eventContext: EventContext,
+  listBehaviour?: { add: ListAddBehaviour; remove: ListRemoveBehaviour }
+): { specState: SpecState<Spec>; listBehaviours?: ListBehaviourAddResult | ListBehaviourRemoveResult } {
   const posString = position ? ` at ${position.specIndex}:${position.eventIndex}` : "";
 
   switch (action.type) {
@@ -512,111 +622,195 @@ function handleAction<Spec extends SpecBase>(
         return specState.state[variableName] as unknown as VariableValue<typeof variable>;
       }
       action.effect.fn(getVal, eventContext);
-      return specState;
+      return { specState };
 
-    case "equals":
+    case "equals": {
       const { variable, value } = action;
       const variableName = getVariableName(variables, variable);
-      const newValue = getValueFromState(value, variables, specState);
 
-      if (Array.isArray(newValue)) {
-        // Handle arrays (like push), where we need to take into account previous values in array
-        const prevValue = specState.state[variableName];
+      if (action.behaviour && listBehaviour) {
 
-        // TODO: not continually adding to array
+        // This is a component handler, so use list behaviour to determine change of state
 
-        if (newValue.length === 0){
-          // We cleared array
+        const prevValue = specState.state[variableName] as string[];
+
+        if (action.behaviour.type === "shouldAdd") {
+          const behaviour = listBehaviour.add;
+          const { listEqualsVar } = action.behaviour;
+          const listEqualsVal = getValueFromState(listEqualsVar, variables, specState) as string[];
+
+          let newArray: string[] = [];
+
+          if (behaviour === "addToEnd") {
+            newArray = [...prevValue, listEqualsVal[listEqualsVal.length - 1]];
+          } else if (behaviour === "addToStart") {
+            newArray = [listEqualsVal[0], ...prevValue];
+          } else {
+            // overwrite
+            newArray = listEqualsVal;
+          }
+
           return {
-            ...specState,
-            state: {
-              ...specState.state,
-              [variableName]: [],
-            }
+            specState: {
+              ...specState,
+              state: {
+                ...specState.state,
+                [variableName]: newArray,
+              }
+            },
+          }
+        } else if (action.behaviour.type === "shouldRemove") {
+          const behaviour = listBehaviour.remove;
+          const { index } = eventContext;
+
+          const newArray =
+            behaviour === "removeAll" ? [] :
+            behaviour === "removeFromEnd" ? prevValue.slice(0, prevValue.length - 1) :
+            behaviour === "removeFromStart" ? prevValue.slice(1) :
+            behaviour === "removeFromIndex" && index !== undefined ? [
+              ...prevValue.slice(0, index),
+              ...prevValue.slice(index + 1)
+            ] : []
+
+          return {
+            specState: {
+              ...specState,
+              state: {
+                ...specState.state,
+                [variableName]: newArray,
+              }
+            },
           }
         }
+        return { specState }
 
-        if (newValue.length === prevValue.length) {
+      }
+
+      const newValue = getValueFromState(value, variables, specState);
+
+      const behaviours: ListBehaviours = {
+        add: new Set(),
+        remove: new Set()
+      }
+
+      const index = eventContext.index;
+
+      if (variable.type === "variableList") {
+        const prevValue = specState.state[variableName];
+
+        if (!Array.isArray(newValue) || !Array.isArray(prevValue)) {
+          throw Error(`Can only set a variable list to an array${posString}`);
+        }
+
+        // Add to list behaviours
+
+        const newValueStart = newValue[0];
+        const newValueEnd = newValue[newValue.length - 1];
+        const prevValueStart = prevValue[0];
+        const prevValueEnd = prevValue[prevValue.length - 1];
+
+        if (newValue.length === 0) {
+          // Set empty array
+
+          if (prevValue.length > 1) {
+            // Length 2 or more -> 0 must mean remove all
+            behaviours.remove.add("removeAll");
+          } else {
+            // Length 1 -> 0 could have removed from anywhere
+            behaviours.remove.add("removeAll");
+            behaviours.remove.add("removeFromEnd");
+            behaviours.remove.add("removeFromIndex");
+            behaviours.remove.add("removeFromStart");
+          }
+        } else if (newValue.length === prevValue.length) {
           // Arrays are the same length so just overwrite
-          return {
+          behaviours.add.add("overwrite");
+
+        } else if (newValue.length === prevValue.length + 1) {
+          // We added to array
+
+          if (prevValue.length === 0) {
+            // Previous array was empty so could have added anywhere
+            behaviours.add.add("addToEnd");
+            behaviours.add.add("addToStart");
+
+          } else if (newValueStart === prevValueStart) {
+            // Both arrays start the same, so was added at the end
+            behaviours.add.add("addToEnd");
+
+          } else if (newValueEnd === prevValueEnd) {
+            // New value added at the beginning since end values the same
+            behaviours.add.add("addToStart");
+          }
+        } else if (newValue.length === prevValue.length - 1) {
+          // We removed from array
+
+          if (index !== undefined) {
+            // We have some information on index
+            if (newValueStart === prevValueStart && newValueEnd === prevValueEnd) {
+              // Arrays start and end the same, so was probably removed from index
+              behaviours.remove.add("removeFromIndex");
+
+            } else if (newValueStart !== prevValueStart) {
+              // Both arrays start different, could be removed there or index
+              behaviours.remove.add("removeFromIndex");
+              behaviours.remove.add("removeFromStart");
+
+            } else if (newValueEnd !== prevValueEnd) {
+              // Both arrays end different, could be removed there or index
+              behaviours.remove.add("removeFromIndex");
+              behaviours.remove.add("removeFromEnd");
+            }
+          } else {
+            if (newValueStart === prevValueStart && newValueEnd === prevValueEnd) {
+              // Arrays start and end the same with no index context, so error
+              throw Error(`Must remove array list at beginning or end without list context${posString}`);
+
+            } else if (newValueStart === prevValueStart) {
+              // Both arrays start the same, so was removed from the end
+              behaviours.remove.add("removeFromEnd");
+
+            } else if (newValueEnd === prevValueEnd) {
+              // Both arrays end the same, so was removed from the start
+              behaviours.remove.add("removeFromStart");
+            }
+          }
+        } else {
+          throw Error(`Invalid array operation${posString}. You can only add one element at the beginning or end of array, and can only remove one element from beginning, end or list index of array`);
+        }
+
+        return {
+          specState: {
             ...specState,
             state: {
               ...specState.state,
               [variableName]: newValue,
             }
-          }
+          },
+          listBehaviours: behaviours.add.size > 0 ? {
+            type: "add",
+            behaviours: behaviours.add,
+            name: variableName,
+            listEqualsVar: value
+          } : behaviours.remove.size > 0 ? {
+            type: "remove",
+            behaviours: behaviours.remove,
+            name: variableName,
+            index
+          } : undefined
         }
-
-        if (newValue.length === prevValue.length + 1) {
-          // We added to array
-
-          if (prevValue.length === 0) {
-            // Previous array was empty so just overwrite
-            return {
-              ...specState,
-              state: {
-                ...specState.state,
-                [variableName]: newValue,
-              }
-            }
-          }
-
-          if (newValue[0] === prevValue[0]) {
-            // Both arrays start the same, so was added at the end
-            const lastNewValue = newValue[newValue.length - 1];
-            return {
-              ...specState,
-              state: {
-                ...specState.state,
-                [variableName]: [...prevValue, lastNewValue],
-              }
-            }
-          }
-
-          if (newValue[newValue.length - 1] === prevValue[prevValue.length - 1]) {
-            // New value added at the beginning
-            const firstNewValue = newValue[0];
-            return {
-              ...specState,
-              state: {
-                ...specState.state,
-                [variableName]: [firstNewValue, ...prevValue],
-              }
-            }
-          }
-        }
-
-        if (newValue.length < prevValue.length) {
-
-          // If we don't have context about the index, it won't matter since we're only comparing array lengths
-          const index = eventContext.index ?? 0;
-
-          if (newValue.length === prevValue.length - 1) {
-            return {
-              ...specState,
-              state: {
-                ...specState.state,
-                [variableName]: [
-                  ...prevValue.slice(0, index),
-                  ...prevValue.slice(index + 1)
-                ],
-              }
-            }
-          }
-          throw Error(`TODO${posString}`)
-
-        }
-
-        throw Error(`Invalid array operation${posString}. You can only add or remove one element from the beginning or end of array`);
       }
 
       return {
-        ...specState,
-        state: {
-          ...specState.state,
-          [variableName]: newValue,
-        }
+        specState: {
+          ...specState,
+          state: {
+            ...specState.state,
+            [variableName]: newValue,
+          }
+        },
       }
+    }
   }
 }
 

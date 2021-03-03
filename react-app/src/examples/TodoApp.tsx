@@ -9,7 +9,9 @@ import { newEffect } from '../core/effects';
 const mySpec = (newSpec: NewSpec) => {
   const NewCardInput = newInput();
   const NewCardText = newText();
-  const PrevCardText = newText();
+  const PrevCardText1 = newText();
+  const PrevCardText2 = newText();
+  const PrevCardText3 = newText();
 
   const CardsList = newVarList(newText());
 
@@ -33,7 +35,7 @@ const mySpec = (newSpec: NewSpec) => {
     equals(CardsList, [NewCardText]);
 
     // Store for later
-    equals(PrevCardText, NewCardText);
+    equals(PrevCardText1, NewCardText);
 
     equals(NewCardText, "");
 
@@ -45,7 +47,25 @@ const mySpec = (newSpec: NewSpec) => {
 
     clickOn(AddButton);
 
-    equals(CardsList, [PrevCardText, NewCardText]);
+    equals(CardsList, [PrevCardText1, NewCardText]);
+
+    // Store for later
+    equals(PrevCardText2, NewCardText);
+
+    equals(NewCardText, "");
+
+
+    // 3rd time
+
+    clickOn(NewCardInput);
+    enterText(NewCardText, "Feed the cat");
+
+    clickOn(AddButton);
+
+    equals(CardsList, [PrevCardText1, PrevCardText2, NewCardText]);
+
+    // Store for later
+    equals(PrevCardText3, NewCardText);
 
     equals(NewCardText, "");
 
@@ -57,10 +77,31 @@ const mySpec = (newSpec: NewSpec) => {
     // Log the value on the card
     doEffect(LogCard);
 
-    equals(CardsList, [PrevCardText]);
+    equals(CardsList, [PrevCardText1, PrevCardText3]);
+
+
+    // Add another
+
+    clickOn(NewCardInput);
+    enterText(NewCardText, "Water the plants");
+
+    clickOn(AddButton);
+
+    equals(CardsList, [PrevCardText1, PrevCardText3, NewCardText]);
+
+    equals(NewCardText, "");
   });
 
-  return { NewCardInput, NewCardText, CardsList, AddButton, PrevCardText, RemoveButtonsList };
+  newSpec("Will not create card with empty text", ({ clickOn, enterText, equals }) => {
+    clickOn(NewCardInput);
+    enterText(NewCardText, "");
+
+    clickOn(AddButton);
+
+    equals(CardsList, []);
+  });
+
+  return { NewCardInput, NewCardText, CardsList, AddButton, PrevCardText1, PrevCardText2, PrevCardText3, RemoveButtonsList };
 };
 
 
