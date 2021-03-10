@@ -2,15 +2,22 @@ import { Component, ComponentList } from "./components";
 import { Effect } from "./effects";
 import { SpecBase } from "./spec";
 import { getValueFromState, SpecState, stateFieldsSimilar } from "./state";
-import { ListAddBehaviour, ListRemoveBehaviour, TextVar, Variable, VariableComparitor } from "./variables";
+import { TextVar, Variable, VariableComparitor } from "./variables";
 
 export type Events = SpecEvent[][];
 export type SpecEvent = SpecEventUserInput | SpecEventAction | SpecEventClick;
 export type SpecEventClick =
   | { type: "clickOn"; component: Component }
-  | { type: "clickOnList"; component: ComponentList<Component, Variable>; index: number }
-export type SpecEventUserInput =
-  | { type: "enterText"; text: TextVar; example: string }
+  | {
+      type: "clickOnList";
+      component: ComponentList<Component, Variable>;
+      index: number;
+    };
+export type SpecEventUserInput = {
+  type: "enterText";
+  text: TextVar;
+  example: string;
+};
 export type SpecEventAction =
   | { type: "doEffect"; effect: Effect }
   | {
@@ -19,11 +26,10 @@ export type SpecEventAction =
       value: VariableComparitor<Variable>;
       behaviour?:
         | { type: "shouldAdd"; listEqualsVar: VariableComparitor<Variable> }
-        | { type: "shouldRemove" }
-    }
+        | { type: "shouldRemove" };
+    };
 
 export type EventContext = { index?: number };
-
 
 export function actionsEqual<Spec extends SpecBase>(
   actionsA: SpecEventAction[],
@@ -46,13 +52,21 @@ export function actionsEqual<Spec extends SpecBase>(
     // Actions will have a different referential equality
     // But the variables and effects will be the same
 
-    if (actionA.type === "doEffect" && actionB.type === "doEffect" && actionA.effect !== actionB.effect) {
+    if (
+      actionA.type === "doEffect" &&
+      actionB.type === "doEffect" &&
+      actionA.effect !== actionB.effect
+    ) {
       return false;
     }
 
     if (actionA.type === "equals" && actionB.type === "equals") {
-      if (actionA.variable.type === "variableList" && actionB.variable.type === "variableList"
-        && actionA.behaviour !== undefined && actionB.behaviour !== undefined) {
+      if (
+        actionA.variable.type === "variableList" &&
+        actionB.variable.type === "variableList" &&
+        actionA.behaviour !== undefined &&
+        actionB.behaviour !== undefined
+      ) {
         // Array operations are equivalent if they have the same behaviour
         return actionA.behaviour?.type === actionB.behaviour?.type;
       }
@@ -67,8 +81,16 @@ export function actionsEqual<Spec extends SpecBase>(
 
       // Check if value is the same (i.e. similarity score of 1).
 
-      const actionAValue = getValueFromState(actionA.value, variables, specState);
-      const actionBValue = getValueFromState(actionB.value, variables, specState);
+      const actionAValue = getValueFromState(
+        actionA.value,
+        variables,
+        specState
+      );
+      const actionBValue = getValueFromState(
+        actionB.value,
+        variables,
+        specState
+      );
 
       return stateFieldsSimilar(actionAValue, actionBValue);
     }
@@ -80,12 +102,17 @@ export function actionsEqual<Spec extends SpecBase>(
 /**
  * Collect next set of actions, until the next type of event
  */
-export function getNextActions(specEvents: SpecEvent[], eventIndex: number): SpecEventAction[] {
+export function getNextActions(
+  specEvents: SpecEvent[],
+  eventIndex: number
+): SpecEventAction[] {
   // We're the last event
   if (eventIndex === specEvents.length - 1) return [];
 
   // Get index of first element not an action
-  let nextNotActionEventIndex = specEvents.slice(eventIndex + 1).findIndex(event => !isAction(event));
+  let nextNotActionEventIndex = specEvents
+    .slice(eventIndex + 1)
+    .findIndex((event) => !isAction(event));
 
   // All proceeding events are actions
   if (nextNotActionEventIndex === -1) {

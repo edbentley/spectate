@@ -6,7 +6,7 @@ export type Effect = {
   fn: (
     getVal: <V extends Variable>(variable: V) => VariableValue<V>,
     context: EventContext
-  ) => void
+  ) => void;
 };
 
 export const newEffect = (fn: Effect["fn"]): Effect => ({ type: "effect", fn });

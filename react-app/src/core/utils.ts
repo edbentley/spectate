@@ -16,7 +16,7 @@ export function setIntersection<T>(...sets: Set<T>[]): Set<T> {
       return intersection;
     default:
       for (const item of first) {
-        if (rest.every(set => set.has(item))) {
+        if (rest.every((set) => set.has(item))) {
           intersection.add(item);
         }
       }

@@ -1,11 +1,10 @@
-import React from 'react'
-import './App.css'
+import React from "react";
+import "./App.css";
 import { useSpec } from "../react";
-import { newInput, newButton } from '../core/components'
-import { newText } from '../core/variables'
-import { NewSpec } from '../core/spec'
-import { newEffect } from '../core/effects';
-
+import { newInput, newButton } from "../core/components";
+import { newText } from "../core/variables";
+import { NewSpec } from "../core/spec";
+import { newEffect } from "../core/effects";
 
 const mySpec = (newSpec: NewSpec) => {
   const EmailInput = newInput();
@@ -19,23 +18,29 @@ const mySpec = (newSpec: NewSpec) => {
   const SignUpButton = newButton();
 
   const PostJson = newEffect((getVal) => {
-    console.log("POST", { email: getVal(EmailText), password: getVal(PasswordText) });
+    console.log("POST", {
+      email: getVal(EmailText),
+      password: getVal(PasswordText),
+    });
   });
 
-  newSpec("Can sign up with email and password", ({ clickOn, enterText, doEffect, equals }) => {
-    clickOn(EmailInput);
-    enterText(EmailText, "hi@test.com");
+  newSpec(
+    "Can sign up with email and password",
+    ({ clickOn, enterText, doEffect, equals }) => {
+      clickOn(EmailInput);
+      enterText(EmailText, "hi@test.com");
 
-    clickOn(PasswordInput);
-    enterText(PasswordText, "password!");
+      clickOn(PasswordInput);
+      enterText(PasswordText, "password!");
 
-    clickOn(SignUpButton);
+      clickOn(SignUpButton);
 
-    doEffect(PostJson);
-    equals(ErrorText, "");
-  });
+      doEffect(PostJson);
+      equals(ErrorText, "");
+    }
+  );
 
-  newSpec("Shows error if empty email", ({ clickOn, enterText, equals }) => {
+  newSpec("Shows error if empty email", ({ clickOn, equals }) => {
     clickOn(SignUpButton);
 
     equals(ErrorText, "Email can't be empty");
@@ -50,30 +55,34 @@ const mySpec = (newSpec: NewSpec) => {
     equals(ErrorText, "Password can't be empty");
   });
 
-  return { EmailInput, EmailText, PasswordInput, PasswordText, SignUpButton, ErrorText };
+  return {
+    EmailInput,
+    EmailText,
+    PasswordInput,
+    PasswordText,
+    SignUpButton,
+    ErrorText,
+  };
 };
 
-
 function App() {
-  const props = useSpec(mySpec)
+  const props = useSpec(mySpec);
 
   return (
     <div className="App">
       <label>
-        Email{" "}
-        <input {...props.EmailInput} />
+        Email <input {...props.EmailInput} />
       </label>
 
       <label>
-        Password{" "}
-        <input {...props.PasswordInput} />
+        Password <input {...props.PasswordInput} />
       </label>
 
       <button {...props.SignUpButton}>Sign Up</button>
 
       {props.ErrorText && <span>{props.ErrorText}</span>}
     </div>
-  )
+  );
 }
 
-export default App
+export default App;

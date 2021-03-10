@@ -1,10 +1,10 @@
-import React from 'react'
-import './App.css'
+import React from "react";
+import "./App.css";
 import { useSpec } from "../react";
-import { newInput, newButton, newComponentList } from '../core/components'
-import { newText, newVarList } from '../core/variables'
-import { NewSpec } from '../core/spec'
-import { newEffect } from '../core/effects';
+import { newInput, newButton, newComponentList } from "../core/components";
+import { newText, newVarList } from "../core/variables";
+import { NewSpec } from "../core/spec";
+import { newEffect } from "../core/effects";
 
 const mySpec = (newSpec: NewSpec) => {
   const NewCardInput = newInput();
@@ -26,107 +26,117 @@ const mySpec = (newSpec: NewSpec) => {
     console.log("Removing", getVal(CardsList)[index]);
   });
 
-  newSpec("Can create multiple TODO cards", ({ clickOn, clickOnIndex, enterText, equals, doEffect }) => {
-    clickOn(NewCardInput);
-    enterText(NewCardText, "Wash the dishes");
+  newSpec(
+    "Can create multiple TODO cards",
+    ({ clickOn, clickOnIndex, enterText, equals, doEffect }) => {
+      clickOn(NewCardInput);
+      enterText(NewCardText, "Wash the dishes");
 
-    clickOn(AddButton);
+      clickOn(AddButton);
 
-    equals(CardsList, [NewCardText]);
+      equals(CardsList, [NewCardText]);
 
-    // Store for later
-    equals(PrevCardText1, NewCardText);
+      // Store for later
+      equals(PrevCardText1, NewCardText);
 
-    equals(NewCardText, "");
+      equals(NewCardText, "");
 
+      // 2nd time
 
-    // 2nd time
+      clickOn(NewCardInput);
+      enterText(NewCardText, "Clean the kitchen");
 
-    clickOn(NewCardInput);
-    enterText(NewCardText, "Clean the kitchen");
+      clickOn(AddButton);
 
-    clickOn(AddButton);
+      equals(CardsList, [PrevCardText1, NewCardText]);
 
-    equals(CardsList, [PrevCardText1, NewCardText]);
+      // Store for later
+      equals(PrevCardText2, NewCardText);
 
-    // Store for later
-    equals(PrevCardText2, NewCardText);
+      equals(NewCardText, "");
 
-    equals(NewCardText, "");
+      // 3rd time
 
+      clickOn(NewCardInput);
+      enterText(NewCardText, "Feed the cat");
 
-    // 3rd time
+      clickOn(AddButton);
 
-    clickOn(NewCardInput);
-    enterText(NewCardText, "Feed the cat");
+      equals(CardsList, [PrevCardText1, PrevCardText2, NewCardText]);
 
-    clickOn(AddButton);
+      // Store for later
+      equals(PrevCardText3, NewCardText);
 
-    equals(CardsList, [PrevCardText1, PrevCardText2, NewCardText]);
+      equals(NewCardText, "");
 
-    // Store for later
-    equals(PrevCardText3, NewCardText);
+      // Remove a card
 
-    equals(NewCardText, "");
+      clickOnIndex(RemoveButtonsList, 1);
 
+      // Log the value on the card
+      doEffect(LogCard);
 
-    // Remove a card
+      equals(CardsList, [PrevCardText1, PrevCardText3]);
 
-    clickOnIndex(RemoveButtonsList, 1);
+      // Add another
 
-    // Log the value on the card
-    doEffect(LogCard);
+      clickOn(NewCardInput);
+      enterText(NewCardText, "Water the plants");
 
-    equals(CardsList, [PrevCardText1, PrevCardText3]);
+      clickOn(AddButton);
 
+      equals(CardsList, [PrevCardText1, PrevCardText3, NewCardText]);
 
-    // Add another
+      equals(NewCardText, "");
+    }
+  );
 
-    clickOn(NewCardInput);
-    enterText(NewCardText, "Water the plants");
+  newSpec(
+    "Will not create card with empty text",
+    ({ clickOn, enterText, equals }) => {
+      clickOn(NewCardInput);
+      enterText(NewCardText, "");
 
-    clickOn(AddButton);
+      clickOn(AddButton);
 
-    equals(CardsList, [PrevCardText1, PrevCardText3, NewCardText]);
+      equals(CardsList, []);
+    }
+  );
 
-    equals(NewCardText, "");
-  });
-
-  newSpec("Will not create card with empty text", ({ clickOn, enterText, equals }) => {
-    clickOn(NewCardInput);
-    enterText(NewCardText, "");
-
-    clickOn(AddButton);
-
-    equals(CardsList, []);
-  });
-
-  return { NewCardInput, NewCardText, CardsList, AddButton, PrevCardText1, PrevCardText2, PrevCardText3, RemoveButtonsList };
+  return {
+    NewCardInput,
+    NewCardText,
+    CardsList,
+    AddButton,
+    PrevCardText1,
+    PrevCardText2,
+    PrevCardText3,
+    RemoveButtonsList,
+  };
 };
 
-
 function App() {
-  const props = useSpec(mySpec)
-
+  const props = useSpec(mySpec);
 
   return (
     <div className="App">
       <label>
-        New Card{" "}
-        <input {...props.NewCardInput} />
+        New Card <input {...props.NewCardInput} />
       </label>
 
       <button {...props.AddButton}>Add</button>
 
       {props.CardsList.map((text, index) => {
         const buttonProps = props.RemoveButtonsList(index);
-        return <div key={index}>
-          <span>{text}</span>
-          <button {...buttonProps}>X</button>
-        </div>
+        return (
+          <div key={index}>
+            <span>{text}</span>
+            <button {...buttonProps}>X</button>
+          </div>
+        );
       })}
     </div>
-  )
+  );
 }
 
-export default App
+export default App;
