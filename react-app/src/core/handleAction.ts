@@ -1,6 +1,11 @@
 import { SpecBase } from "./spec";
 import { SpecState, getValueFromState } from "./state";
-import { EventContext, SpecEventAction } from "./events";
+import {
+  EventContext,
+  EventPosition,
+  formatEventPosition,
+  SpecEventAction,
+} from "./events";
 import {
   getVariableName,
   ListAddBehaviour,
@@ -19,16 +24,14 @@ export function handleActionGeneratingModel<Spec extends SpecBase>(
   action: SpecEventAction,
   specState: SpecState<Spec>,
   variables: { name: string; variable: Variable }[],
-  position: { specIndex: number; eventIndex: number },
-  eventContext: EventContext
+  position: EventPosition,
+  eventContext: EventContext,
+  specDescriptions: string[]
 ): {
   specState: SpecState<Spec>;
   listBehaviours?: ListBehaviourAddResult | ListBehaviourRemoveResult;
 } {
-  // TODO: name specs better
-  const posString = position
-    ? ` at ${position.specIndex}:${position.eventIndex}`
-    : "";
+  const getPosString = () => formatEventPosition(position, specDescriptions);
 
   switch (action.type) {
     case "doEffect":
@@ -52,7 +55,9 @@ export function handleActionGeneratingModel<Spec extends SpecBase>(
         const prevValue = specState.state[variableName];
 
         if (!Array.isArray(newValue) || !Array.isArray(prevValue)) {
-          throw Error(`Can only set a variable list to an array${posString}`);
+          throw Error(
+            `Can only set a variable list to an array in ${getPosString()}`
+          );
         }
 
         // Add to list behaviours
@@ -119,7 +124,7 @@ export function handleActionGeneratingModel<Spec extends SpecBase>(
             ) {
               // Arrays start and end the same with no index context, so error
               throw Error(
-                `Must remove array list at beginning or end without list context${posString}`
+                `Must remove array list at beginning or end without list context in ${getPosString()}`
               );
             } else if (newValueStart === prevValueStart) {
               // Both arrays start the same, so was removed from the end
@@ -131,7 +136,7 @@ export function handleActionGeneratingModel<Spec extends SpecBase>(
           }
         } else {
           throw Error(
-            `Invalid array operation${posString}. You can only add one element at the beginning or end of array, and can only remove one element from beginning, end or list index of array`
+            `Invalid array operation in ${getPosString()} You can only add one element at the beginning or end of array, and can only remove one element from beginning, end or list index of array`
           );
         }
 

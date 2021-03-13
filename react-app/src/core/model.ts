@@ -3,7 +3,9 @@ import { SpecBase } from "./spec";
 import { getInitSpecState, SpecState, statesEqual } from "./state";
 import {
   actionsEqual,
+  EventPosition,
   Events,
+  formatEventPosition,
   getNextActions,
   SpecEvent,
   SpecEventAction,
@@ -30,7 +32,7 @@ type EventsModel<Spec extends SpecBase> = {
       // An error is thrown if button and state are the same but actions different
       actions: SpecEventAction[];
       // Can be multiple positions if fields above are the same in multiple specs
-      positions: { specIndex: number; eventIndex: number }[];
+      positions: EventPosition[];
     }[]
   >;
 
@@ -46,7 +48,7 @@ type EventsModel<Spec extends SpecBase> = {
       // The connected var supplying input
       connectedVariableName: string | null;
       // Can be multiple positions if fields above are the same in multiple specs
-      positions: { specIndex: number; eventIndex: number }[];
+      positions: EventPosition[];
     }[]
   >;
 
@@ -60,7 +62,7 @@ type EventsModel<Spec extends SpecBase> = {
       // An error is thrown if button and state are the same but actions different
       actions: SpecEventAction[];
       // Can be multiple positions if fields above are the same in multiple specs
-      positions: { specIndex: number; eventIndex: number }[];
+      positions: EventPosition[];
     }[]
   >; // TODO: and input list
 
@@ -72,7 +74,8 @@ export function getEventsModel<Spec extends SpecBase>(
   events: Events,
   spec: Spec,
   components: { name: string; component: Component }[],
-  variables: { name: string; variable: Variable }[]
+  variables: { name: string; variable: Variable }[],
+  specDescriptions: string[]
 ): EventsModel<Spec> {
   const buttonEvents: EventsModel<Spec>["buttonEvents"] = {};
   const inputEvents: EventsModel<Spec>["inputEvents"] = {};
@@ -102,7 +105,8 @@ export function getEventsModel<Spec extends SpecBase>(
           variableListBehaviour,
           components,
           variables,
-          prevListContext
+          prevListContext,
+          specDescriptions
         );
         if (
           replacedEvent &&
@@ -156,12 +160,18 @@ function updateStateAndUpdateModel<Spec extends SpecBase>(
   variableListBehaviour: EventsModel<Spec>["variableListBehaviour"],
   components: { name: string; component: Component }[],
   variables: { name: string; variable: Variable }[],
-  listContext: ListContext
+  listContext: ListContext,
+  specDescriptions: string[]
 ): {
   specState: SpecState<Spec>;
   listContext: ListContext;
   replacedEvent?: SpecEvent;
 } {
+  const position: EventPosition = {
+    specIndex,
+    eventIndex,
+    eventType: event.type,
+  };
   switch (event.type) {
     case "clickOn":
       switch (event.component.type) {
@@ -180,7 +190,7 @@ function updateStateAndUpdateModel<Spec extends SpecBase>(
                 state: specState,
                 button: event.component,
                 actions,
-                positions: [{ specIndex, eventIndex }],
+                positions: [position],
               },
             ];
           } else {
@@ -202,7 +212,7 @@ function updateStateAndUpdateModel<Spec extends SpecBase>(
                 state: specState,
                 button: event.component,
                 actions,
-                positions: [{ specIndex, eventIndex }],
+                positions: [position],
               });
             } else if (
               actionsEqual(
@@ -214,11 +224,16 @@ function updateStateAndUpdateModel<Spec extends SpecBase>(
               )
             ) {
               // Actions are equivalent, so just add it to positions
-              existing.positions.push({ specIndex, eventIndex });
+              existing.positions.push(position);
             } else {
               const conflictPos = existing.positions[0];
+              const conflictPosStr = formatEventPosition(
+                conflictPos,
+                specDescriptions
+              );
+              const posStr = formatEventPosition(position, specDescriptions);
               throw Error(
-                `Conflicting actions for the same state for button ${buttonName} in specs ${conflictPos.specIndex}:${conflictPos.eventIndex} and ${specIndex}:${eventIndex}`
+                `Conflicting actions for the same state for button ${buttonName} in ${conflictPosStr} and ${posStr}`
               );
             }
           }
@@ -263,7 +278,7 @@ function updateStateAndUpdateModel<Spec extends SpecBase>(
               {
                 state: specState,
                 actions,
-                positions: [{ specIndex, eventIndex }],
+                positions: [position],
               },
             ];
           } else {
@@ -284,7 +299,7 @@ function updateStateAndUpdateModel<Spec extends SpecBase>(
               existingListEvents.push({
                 state: specState,
                 actions,
-                positions: [{ specIndex, eventIndex }],
+                positions: [position],
               });
             } else if (
               actionsEqual(
@@ -296,11 +311,16 @@ function updateStateAndUpdateModel<Spec extends SpecBase>(
               )
             ) {
               // Actions are equivalent, so just add it to positions
-              existing.positions.push({ specIndex, eventIndex });
+              existing.positions.push(position);
             } else {
               const conflictPos = existing.positions[0];
+              const conflictPosStr = formatEventPosition(
+                conflictPos,
+                specDescriptions
+              );
+              const posStr = formatEventPosition(position, specDescriptions);
               throw Error(
-                `Conflicting actions for the same state for component list ${listName} in specs ${conflictPos.specIndex}:${conflictPos.eventIndex} and ${specIndex}:${eventIndex}`
+                `Conflicting actions for the same state for component list ${listName} in ${conflictPosStr} and ${posStr}`
               );
             }
           }
@@ -344,8 +364,9 @@ function updateStateAndUpdateModel<Spec extends SpecBase>(
         event,
         specState,
         variables,
-        { specIndex, eventIndex },
-        { index: contextIndex }
+        position,
+        { index: contextIndex },
+        specDescriptions
       );
 
       if (listBehaviours) {
@@ -418,7 +439,7 @@ function updateStateAndUpdateModel<Spec extends SpecBase>(
             state: specState,
             input: focussedComponent,
             connectedVariableName,
-            positions: [{ specIndex, eventIndex }],
+            positions: [position],
           },
         ];
       } else {
@@ -434,15 +455,20 @@ function updateStateAndUpdateModel<Spec extends SpecBase>(
             state: specState,
             input: focussedComponent,
             connectedVariableName,
-            positions: [{ specIndex, eventIndex }],
+            positions: [position],
           });
         } else if (existing.connectedVariableName === connectedVariableName) {
           // Events are equivalent, so just add to positions
-          existing.positions.push({ specIndex, eventIndex });
+          existing.positions.push(position);
         } else {
           const conflictPos = existing.positions[0];
+          const conflictPosStr = formatEventPosition(
+            conflictPos,
+            specDescriptions
+          );
+          const posStr = formatEventPosition(position, specDescriptions);
           throw Error(
-            `Conflicting linked variables ${existing.connectedVariableName} and ${connectedVariableName} for the same state for input ${inputName} in specs ${conflictPos.specIndex}:${conflictPos.eventIndex} and ${specIndex}:${eventIndex}`
+            `Conflicting linked variables ${existing.connectedVariableName} and ${connectedVariableName} for the same state for input ${inputName} in ${conflictPosStr} and ${posStr}`
           );
         }
       }
@@ -453,8 +479,9 @@ function updateStateAndUpdateModel<Spec extends SpecBase>(
           { type: "equals", variable: event.text, value: event.example },
           specState,
           variables,
-          { specIndex, eventIndex },
-          {}
+          position,
+          {},
+          specDescriptions
         ).specState,
         listContext,
       };

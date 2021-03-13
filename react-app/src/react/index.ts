@@ -34,15 +34,16 @@ type SpecFieldProps<Field> = Field extends Variable
 export function useSpec<Spec extends SpecBase>(
   getSpec: (newSpec: NewSpec) => Spec
 ): SpecProps<Spec> {
-  const { spec, events, initSpecState } = useMemo(() => parseSpec(getSpec), [
-    getSpec,
-  ]);
+  const { spec, events, initSpecState, specDescriptions } = useMemo(
+    () => parseSpec(getSpec),
+    [getSpec]
+  );
 
   const [specState, setSpecState] = useState(initSpecState);
 
   const componentHandlers = useMemo(
-    () => getComponentHandlers(spec, events, setSpecState),
-    [spec, events]
+    () => getComponentHandlers(spec, events, setSpecState, specDescriptions),
+    [spec]
   );
 
   return getProps(componentHandlers, spec, specState);

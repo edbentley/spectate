@@ -129,3 +129,21 @@ export function getNextActions(
 export function isAction(specEvent: SpecEvent): specEvent is SpecEventAction {
   return specEvent.type === "equals" || specEvent.type === "doEffect";
 }
+
+export function formatEventPosition(
+  eventPosition: EventPosition,
+  specDescriptions: string[]
+) {
+  return `
+
+Spec name: "${specDescriptions[eventPosition.specIndex]}"
+Event number: ${eventPosition.eventIndex + 1} (${eventPosition.eventType})
+
+`;
+}
+
+export type EventPosition = {
+  specIndex: number;
+  eventIndex: number;
+  eventType: SpecEvent["type"];
+};

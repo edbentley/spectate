@@ -1,7 +1,12 @@
 import { Component, isComponent } from "./components";
 import { SpecBase } from "./spec";
 import { SpecState, getSimilarityScore } from "./state";
-import { Events } from "./events";
+import {
+  EventPosition,
+  Events,
+  formatEventPosition,
+  SpecEvent,
+} from "./events";
 import { getVariableName, isVariable, Variable } from "./variables";
 import { getEventsModel } from "./model";
 import { handleActionRunningApp } from "./handleAction";
@@ -47,7 +52,8 @@ export function getComponentHandlers<Spec extends SpecBase>(
   events: Events,
   updateSpecState: (
     update: (specState: SpecState<Spec>) => SpecState<Spec>
-  ) => void
+  ) => void,
+  specDescriptions: string[]
 ): SpecComponentHandlers<Spec> {
   const specs = Object.entries(spec).map(([fieldName, fieldValue]) => ({
     fieldName,
@@ -73,7 +79,13 @@ export function getComponentHandlers<Spec extends SpecBase>(
       variable: fieldValue as Variable,
     }));
 
-  const eventsModel = getEventsModel(events, spec, components, variables);
+  const eventsModel = getEventsModel(
+    events,
+    spec,
+    components,
+    variables,
+    specDescriptions
+  );
 
   const buttons: SpecComponentHandlers<Spec>["buttons"] = {};
   const inputs: SpecComponentHandlers<Spec>["inputs"] = {};
@@ -87,7 +99,11 @@ export function getComponentHandlers<Spec extends SpecBase>(
           const relevantEvents = eventsModel.buttonEvents[name];
 
           // Then the one closest to current state
-          const bestEvent = getRelevantEvent(relevantEvents, appState);
+          const bestEvent = getRelevantEvent(
+            relevantEvents,
+            appState,
+            specDescriptions
+          );
 
           if (bestEvent === null) {
             return;
@@ -129,7 +145,11 @@ export function getComponentHandlers<Spec extends SpecBase>(
         const relevantEvents = eventsModel.inputEvents[name];
 
         // Then the one closest to current state
-        const bestEvent = getRelevantEvent(relevantEvents, appState);
+        const bestEvent = getRelevantEvent(
+          relevantEvents,
+          appState,
+          specDescriptions
+        );
 
         if (bestEvent === null) {
           return {
@@ -180,7 +200,11 @@ export function getComponentHandlers<Spec extends SpecBase>(
               const addBehaviour = [...behaviour.add][0];
               const removeBehaviour = [...behaviour.remove][0];
 
-              const bestEvent = getRelevantEvent(relevantEvents, appState);
+              const bestEvent = getRelevantEvent(
+                relevantEvents,
+                appState,
+                specDescriptions
+              );
 
               if (bestEvent === null) {
                 return;
@@ -220,9 +244,13 @@ function getRelevantEvent<
   Spec extends SpecBase,
   T extends {
     state: SpecState<Spec>;
-    positions: { specIndex: number; eventIndex: number }[];
+    positions: EventPosition[];
   }
->(relevantEvents: T[], appState: SpecState<Spec>): T | null {
+>(
+  relevantEvents: T[],
+  appState: SpecState<Spec>,
+  specDescriptions: string[]
+): T | null {
   // Nothing similar in spec
   if (!relevantEvents || relevantEvents.length === 0) {
     return null;
@@ -242,8 +270,12 @@ function getRelevantEvent<
   if (bestEvent.score === secondBestEvent?.score) {
     const pos1 = bestEvent.event.positions[0];
     const pos2 = secondBestEvent.event.positions[0];
+
+    const posStr1 = formatEventPosition(pos1, specDescriptions);
+    const posStr2 = formatEventPosition(pos2, specDescriptions);
+
     console.warn(
-      `Couldn't pick between similarity score of events at ${pos1.specIndex}:${pos1.eventIndex} and ${pos2.specIndex}:${pos2.eventIndex}, so going with the first one.`
+      `Couldn't pick between similarity score of events in ${posStr1} and ${posStr2} so going with the first one.`
     );
   }
 

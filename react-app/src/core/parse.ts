@@ -11,7 +11,12 @@ import { Effect } from "./effects";
  */
 export function parseSpec<Spec extends SpecBase>(
   getSpec: (newSpec: NewSpec) => Spec
-): { spec: Spec; events: Events; initSpecState: SpecState<Spec> } {
+): {
+  spec: Spec;
+  events: Events;
+  initSpecState: SpecState<Spec>;
+  specDescriptions: string[];
+} {
   const events: Events = [];
 
   const doEffect = (index: number) => (effect: Effect) => {
@@ -65,5 +70,6 @@ export function parseSpec<Spec extends SpecBase>(
     spec,
     initSpecState: getInitSpecState(spec),
     events,
+    specDescriptions,
   };
 }
