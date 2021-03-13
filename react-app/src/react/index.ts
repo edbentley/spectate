@@ -2,9 +2,9 @@ import { useMemo, useState } from "react";
 import { NewSpec, SpecBase } from "../core/spec";
 import {
   SpecComponentHandlers,
-  processSpec,
   getComponentHandlers,
-} from "../core/core";
+} from "../core/componentHandlers";
+import { parseSpec } from "../core/parse";
 import { SpecState } from "../core/state";
 import { isVariable, Variable, VariableValue } from "../core/variables";
 import {
@@ -34,7 +34,7 @@ type SpecFieldProps<Field> = Field extends Variable
 export function useSpec<Spec extends SpecBase>(
   getSpec: (newSpec: NewSpec) => Spec
 ): SpecProps<Spec> {
-  const { spec, events, initSpecState } = useMemo(() => processSpec(getSpec), [
+  const { spec, events, initSpecState } = useMemo(() => parseSpec(getSpec), [
     getSpec,
   ]);
 
