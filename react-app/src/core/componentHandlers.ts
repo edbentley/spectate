@@ -10,6 +10,7 @@ import {
 import { getVariableName, isVariable, Variable } from "./variables";
 import { getEventsModel } from "./model";
 import { handleActionRunningApp } from "./handleAction";
+import { replaceArray } from "./utils";
 
 export interface SpecComponentHandlers<Spec extends SpecBase> {
   // Record of key: button name, val: onClick function determined using similarity scores
@@ -18,12 +19,10 @@ export interface SpecComponentHandlers<Spec extends SpecBase> {
     (appState: SpecState<Spec>) => { onClick: () => void }
   >;
 
-  // Record of key: input name, val: onChange function determined using similarity scores
+  // Record of key: input name, val: onChange function
   inputs: Record<
     string,
-    (
-      appState: SpecState<Spec>
-    ) => {
+    {
       connectedVariableName: null | string;
       onChange: (value: string) => void;
     }
@@ -140,36 +139,18 @@ export function getComponentHandlers<Spec extends SpecBase>(
         },
       });
     } else if (component.type === "input") {
-      inputs[name] = (appState) => {
-        // Get input's potential enterText events
-        const relevantEvents = eventsModel.inputEvents[name];
-
-        // Then the one closest to current state
-        const bestEvent = getRelevantEvent(
-          relevantEvents,
-          appState,
-          specDescriptions
-        );
-
-        if (bestEvent === null) {
-          return {
-            connectedVariableName: null,
-            onChange: () => undefined,
-          };
-        }
-
-        const { connectedVariableName } = bestEvent;
-
-        return {
-          connectedVariableName,
-          onChange: (value) => {
-            if (connectedVariableName === null) return;
-            updateSpecState((s) => ({
-              ...s,
-              state: { ...s.state, [connectedVariableName]: value },
-            }));
-          },
-        };
+      const connectedVariableName = component.connectedVar
+        ? getVariableName(variables, component.connectedVar)
+        : null;
+      inputs[name] = {
+        connectedVariableName,
+        onChange: (value) => {
+          if (connectedVariableName === null) return;
+          updateSpecState((s) => ({
+            ...s,
+            state: { ...s.state, [connectedVariableName]: value },
+          }));
+        },
       };
     } else if (component.type === "componentList") {
       const connectedVariableName = getVariableName(
@@ -181,17 +162,28 @@ export function getComponentHandlers<Spec extends SpecBase>(
         const componentType = component.component.type;
 
         if (componentType === "input") {
-          // TODO
           return {
             connectedVariableName,
-            onChange: (val, index) => null,
+            onChange: (val, index) => {
+              updateSpecState((s) => ({
+                ...s,
+                state: {
+                  ...s.state,
+                  [connectedVariableName]: replaceArray<string>(
+                    s.state[connectedVariableName] as string[],
+                    val,
+                    index
+                  ),
+                },
+              }));
+            },
           };
         }
         if (componentType === "button") {
           return {
             onClick: (index) => {
               // Repeat of button
-              const relevantEvents = eventsModel.componentListEvents[name];
+              const relevantEvents = eventsModel.buttonListEvents[name];
 
               const behaviour =
                 eventsModel.variableListBehaviour[connectedVariableName];

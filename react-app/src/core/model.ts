@@ -1,4 +1,4 @@
-import { Button, Component, getComponentName, Input } from "./components";
+import { Button, Component, getComponentName } from "./components";
 import { SpecBase } from "./spec";
 import { getInitSpecState, SpecState, statesEqual } from "./state";
 import {
@@ -18,6 +18,7 @@ import {
   VariableList,
 } from "./variables";
 import { handleActionGeneratingModel } from "./handleAction";
+import { replaceArray } from "./utils";
 
 type EventsModel<Spec extends SpecBase> = {
   // Key is component name
@@ -36,24 +37,8 @@ type EventsModel<Spec extends SpecBase> = {
     }[]
   >;
 
-  // Key is component name
-  // We only care about enterText here, not clickOn
-  inputEvents: Record<
-    string,
-    {
-      // State at this point
-      state: SpecState<Spec>;
-      // The input text is entering
-      input: Input;
-      // The connected var supplying input
-      connectedVariableName: string | null;
-      // Can be multiple positions if fields above are the same in multiple specs
-      positions: EventPosition[];
-    }[]
-  >;
-
   // Key is component list name
-  componentListEvents: Record<
+  buttonListEvents: Record<
     string,
     {
       // State at this point
@@ -64,7 +49,7 @@ type EventsModel<Spec extends SpecBase> = {
       // Can be multiple positions if fields above are the same in multiple specs
       positions: EventPosition[];
     }[]
-  >; // TODO: and input list
+  >;
 
   // Key is variable list name
   variableListBehaviour: Record<string, ListBehaviours>;
@@ -78,8 +63,7 @@ export function getEventsModel<Spec extends SpecBase>(
   specDescriptions: string[]
 ): EventsModel<Spec> {
   const buttonEvents: EventsModel<Spec>["buttonEvents"] = {};
-  const inputEvents: EventsModel<Spec>["inputEvents"] = {};
-  const componentListEvents: EventsModel<Spec>["componentListEvents"] = {};
+  const buttonListEvents: EventsModel<Spec>["buttonListEvents"] = {};
   const variableListBehaviour: EventsModel<Spec>["variableListBehaviour"] = {};
 
   events.forEach((specEvents, specIndex) => {
@@ -102,7 +86,6 @@ export function getEventsModel<Spec extends SpecBase>(
           currSpecEventsWithBehaviour,
           // Use dummy vars for events model since we don't want to add to them
           // for real until we've done the first pass
-          {},
           {},
           {},
           {},
@@ -143,8 +126,7 @@ export function getEventsModel<Spec extends SpecBase>(
           prevSpecState,
           currSpecEventsWithBehaviour,
           buttonEvents,
-          inputEvents,
-          componentListEvents,
+          buttonListEvents,
           variableListBehaviour,
           components,
           variables,
@@ -171,8 +153,7 @@ export function getEventsModel<Spec extends SpecBase>(
 
   return {
     buttonEvents,
-    inputEvents,
-    componentListEvents,
+    buttonListEvents,
     variableListBehaviour,
   };
 }
@@ -187,8 +168,7 @@ function updateStateAndUpdateModel<Spec extends SpecBase>(
   specState: SpecState<Spec>,
   specEvents: SpecEvent[],
   buttonEvents: EventsModel<Spec>["buttonEvents"],
-  inputEvents: EventsModel<Spec>["inputEvents"],
-  componentListEvents: EventsModel<Spec>["componentListEvents"],
+  buttonListEvents: EventsModel<Spec>["buttonListEvents"],
   variableListBehaviour: EventsModel<Spec>["variableListBehaviour"],
   components: { name: string; component: Component }[],
   variables: { name: string; variable: Variable }[],
@@ -302,11 +282,11 @@ function updateStateAndUpdateModel<Spec extends SpecBase>(
           const actions = getNextActions(specEvents, eventIndex);
 
           const listName = getComponentName(components, event.component);
-          const existingListEvents = componentListEvents[listName];
+          const existingListEvents = buttonListEvents[listName];
 
           if (!existingListEvents) {
             // First event state for this list
-            componentListEvents[listName] = [
+            buttonListEvents[listName] = [
               {
                 state: specState,
                 actions,
@@ -370,13 +350,15 @@ function updateStateAndUpdateModel<Spec extends SpecBase>(
           };
 
         case "input":
-          // TODO
           return {
             specState: {
               ...specState,
               focus: event.component,
             },
-            listContext,
+            listContext: {
+              index: event.index,
+              variable: event.component.connectedVariable,
+            },
           };
       }
 
@@ -468,70 +450,61 @@ function updateStateAndUpdateModel<Spec extends SpecBase>(
     case "enterText":
       const focussedComponent = specState.focus;
 
-      if (focussedComponent === null || focussedComponent.type !== "input") {
-        return { specState, listContext };
-      }
-
-      // We need to add this event to inputEvents
-
-      const inputName = getComponentName(components, focussedComponent);
-      const connectedVariableName = getVariableName(variables, event.text);
-
-      const existingInputEvents = inputEvents[inputName];
-
-      if (!existingInputEvents) {
-        // First event state for this input
-        inputEvents[inputName] = [
-          {
-            state: specState,
-            input: focussedComponent,
-            connectedVariableName,
-            positions: [position],
-          },
-        ];
-      } else {
-        const existing = existingInputEvents.find(
-          (inputEvent) =>
-            statesEqual(inputEvent.state, specState) ||
-            inputEvent.connectedVariableName === connectedVariableName
-        );
-
-        if (!existing) {
-          // Not first event state for this input, but unique state
-          existingInputEvents.push({
-            state: specState,
-            input: focussedComponent,
-            connectedVariableName,
-            positions: [position],
-          });
-        } else if (existing.connectedVariableName === connectedVariableName) {
-          // Events are equivalent, so just add to positions
-          existing.positions.push(position);
-        } else {
-          const conflictPos = existing.positions[0];
-          const conflictPosStr = formatEventPosition(
-            conflictPos,
-            specDescriptions
-          );
+      if (focussedComponent?.type === "input") {
+        if (!focussedComponent.connectedVar) {
+          const inputName = getComponentName(components, focussedComponent);
           const posStr = formatEventPosition(position, specDescriptions);
           throw Error(
-            `Conflicting linked variables ${existing.connectedVariableName} and ${connectedVariableName} for the same state for input ${inputName} in ${conflictPosStr} and ${posStr}`
+            `Input ${inputName} is missing connected text variable when text is entered in ${posStr}`
           );
         }
+
+        const connectedVarName = getVariableName(
+          variables,
+          focussedComponent.connectedVar
+        );
+
+        // Update state field
+        return {
+          specState: {
+            ...specState,
+            state: {
+              ...specState.state,
+              [connectedVarName]: event.example,
+            },
+          },
+          listContext,
+        };
       }
 
-      // Entering text to input with connected var is equivalent to setting var with equals
-      return {
-        specState: handleActionGeneratingModel(
-          { type: "equals", variable: event.text, value: event.example },
-          specState,
+      if (
+        focussedComponent?.type === "componentList" &&
+        focussedComponent.component.type === "input" &&
+        listContext
+      ) {
+        const connectedVarName = getVariableName(
           variables,
-          position,
-          {},
-          specDescriptions
-        ).specState,
-        listContext,
-      };
+          focussedComponent.connectedVariable
+        );
+
+        // Update state array field
+        return {
+          specState: {
+            ...specState,
+            state: {
+              ...specState.state,
+              [connectedVarName]: replaceArray<string>(
+                specState.state[connectedVarName] as string[],
+                event.example,
+                listContext.index
+              ),
+            },
+          },
+          listContext,
+        };
+      }
+
+      return { specState, listContext };
   }
 }
 

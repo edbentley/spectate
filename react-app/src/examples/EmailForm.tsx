@@ -7,11 +7,14 @@ import { NewSpec } from "../core/spec";
 import { newEffect } from "../core/effects";
 
 const mySpec = (newSpec: NewSpec) => {
-  const EmailInput = newInput();
   const EmailText = newText();
+  const EmailInput = newInput(EmailText);
 
-  const PasswordInput = newInput({ inputType: "password" });
   const PasswordText = newText();
+  const PasswordInput = newInput({
+    inputType: "password",
+    connectedVar: PasswordText,
+  });
 
   const ErrorText = newText();
 
@@ -28,10 +31,10 @@ const mySpec = (newSpec: NewSpec) => {
     "Can sign up with email and password",
     ({ clickOn, enterText, doEffect, equals }) => {
       clickOn(EmailInput);
-      enterText(EmailText, "hi@test.com");
+      enterText("hi@test.com");
 
       clickOn(PasswordInput);
-      enterText(PasswordText, "password!");
+      enterText("password!");
 
       clickOn(SignUpButton);
 
@@ -48,7 +51,7 @@ const mySpec = (newSpec: NewSpec) => {
 
   newSpec("Shows error if empty password", ({ clickOn, enterText, equals }) => {
     clickOn(EmailInput);
-    enterText(EmailText, "hi@test.com");
+    enterText("hi@test.com");
 
     clickOn(SignUpButton);
 

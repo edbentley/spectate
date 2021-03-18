@@ -2,7 +2,7 @@ import { Component, ComponentList } from "./components";
 import { Effect } from "./effects";
 import { SpecBase } from "./spec";
 import { getValueFromState, SpecState, stateFieldsSimilar } from "./state";
-import { TextVar, Variable, VariableComparitor } from "./variables";
+import { Variable, VariableComparitor } from "./variables";
 
 export type Events = SpecEvent[][];
 export type SpecEvent = SpecEventUserInput | SpecEventAction | SpecEventClick;
@@ -15,7 +15,6 @@ export type SpecEventClick =
     };
 export type SpecEventUserInput = {
   type: "enterText";
-  text: TextVar;
   example: string;
 };
 export type SpecEventAction =

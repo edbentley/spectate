@@ -24,3 +24,7 @@ export function setIntersection<T>(...sets: Set<T>[]): Set<T> {
       return intersection;
   }
 }
+
+export function replaceArray<T>(array: T[], item: T, index: number) {
+  return [...array.slice(0, index), item, ...array.slice(index + 1)];
+}

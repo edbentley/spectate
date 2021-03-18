@@ -25,7 +25,7 @@ type SpecFieldProps<Field> = Field extends Variable
   : Field extends Button
   ? React.ButtonHTMLAttributes<HTMLButtonElement>
   : Field extends ComponentList<infer Component, infer Variable>
-  ? (index: number) => SpecFieldProps<Component>[]
+  ? (index: number) => SpecFieldProps<Component>
   : never;
 
 /**
@@ -94,7 +94,7 @@ function getComponentProps<Spec extends SpecBase>(
       return buttonProps;
 
     case "input":
-      const inputHandler = componentHandlers.inputs[name](specState);
+      const inputHandler = componentHandlers.inputs[name];
 
       // The variable whose value matches input
       const connectedVarName = inputHandler.connectedVariableName;

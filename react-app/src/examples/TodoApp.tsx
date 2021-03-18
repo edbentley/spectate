@@ -7,11 +7,12 @@ import { NewSpec } from "../core/spec";
 import { newEffect } from "../core/effects";
 
 const mySpec = (newSpec: NewSpec) => {
-  const NewCardInput = newInput();
   const NewCardText = newText();
+  const NewCardInput = newInput(NewCardText);
 
   const CardsList = newVarList(newText());
 
+  const CardInputsList = newComponentList(newInput(), CardsList);
   const RemoveButtonsList = newComponentList(newButton(), CardsList);
 
   const AddButton = newButton();
@@ -27,7 +28,7 @@ const mySpec = (newSpec: NewSpec) => {
     "Can create multiple TODO cards",
     ({ clickOn, clickOnIndex, enterText, equals, doEffect }) => {
       clickOn(NewCardInput);
-      enterText(NewCardText, "Wash the dishes");
+      enterText("Wash the dishes");
 
       clickOn(AddButton);
 
@@ -38,7 +39,7 @@ const mySpec = (newSpec: NewSpec) => {
       // 2nd time
 
       clickOn(NewCardInput);
-      enterText(NewCardText, "Clean the kitchen");
+      enterText("Clean the kitchen");
 
       clickOn(AddButton);
 
@@ -49,7 +50,7 @@ const mySpec = (newSpec: NewSpec) => {
       // 3rd time
 
       clickOn(NewCardInput);
-      enterText(NewCardText, "Feed the cat");
+      enterText("Feed the cat");
 
       clickOn(AddButton);
 
@@ -69,13 +70,18 @@ const mySpec = (newSpec: NewSpec) => {
       // Add another
 
       clickOn(NewCardInput);
-      enterText(NewCardText, "Water the plants");
+      enterText("Water the plants");
 
       clickOn(AddButton);
 
       equals(CardsList, ["Wash the dishes", "Feed the cat", NewCardText]);
 
       equals(NewCardText, "");
+
+      // Can replace card
+
+      clickOnIndex(CardInputsList, 0);
+      enterText("Hang up clothes");
     }
   );
 
@@ -83,7 +89,7 @@ const mySpec = (newSpec: NewSpec) => {
     "Will not create card with empty text",
     ({ clickOn, enterText, equals }) => {
       clickOn(NewCardInput);
-      enterText(NewCardText, "");
+      enterText("");
 
       clickOn(AddButton);
 
@@ -96,6 +102,7 @@ const mySpec = (newSpec: NewSpec) => {
     NewCardText,
     CardsList,
     AddButton,
+    CardInputsList,
     RemoveButtonsList,
   };
 };
@@ -111,11 +118,12 @@ function App() {
 
       <button {...props.AddButton}>Add</button>
 
-      {props.CardsList.map((text, index) => {
+      {props.CardsList.map((_, index) => {
         const buttonProps = props.RemoveButtonsList(index);
+        const inputsProps = props.CardInputsList(index);
         return (
           <div key={index}>
-            <span>{text}</span>
+            <input {...inputsProps} />
             <button {...buttonProps}>X</button>
           </div>
         );

@@ -21,7 +21,7 @@ test("Can create multiple TODO cards", () => {
   expect(newCardInput.value).toBe("");
 
   // Card added
-  expect(screen.queryByText("Wash the clothes")).not.toBe(null);
+  expect(screen.queryByDisplayValue("Wash the clothes")).not.toBe(null);
 
   // Add two more
   fireEvent.change(newCardInput, { target: { value: "Clean the car" } });
@@ -30,14 +30,15 @@ test("Can create multiple TODO cards", () => {
   fireEvent.click(addButton);
 
   // Click middle card cross
-  const middleRemoveButton = screen.getByText("Clean the car").nextSibling!;
+  const middleRemoveButton = screen.getByDisplayValue("Clean the car")
+    .nextSibling!;
 
   fireEvent.click(middleRemoveButton);
 
   // Card removed, other 2 remain
-  expect(screen.queryByText("Wash the clothes")).not.toBe(null);
-  expect(screen.queryByText("Clean the car")).toBe(null);
-  expect(screen.queryByText("Feed the cat")).not.toBe(null);
+  expect(screen.queryByDisplayValue("Wash the clothes")).not.toBe(null);
+  expect(screen.queryByDisplayValue("Clean the car")).toBe(null);
+  expect(screen.queryByDisplayValue("Feed the cat")).not.toBe(null);
 
   expect(consoleSpy).toHaveBeenCalledWith("Removing", "Clean the car");
   expect(warnSpy).not.toHaveBeenCalled();

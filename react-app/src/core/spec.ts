@@ -20,7 +20,7 @@ export type NewSpec = (description: string, spec: SpecFn) => void;
 
 export type SpecFn = (args: {
   // User inputs
-  enterText: (text: TextVar, example: string) => void;
+  enterText: (example: string) => void;
   clickOn: (component: Exclude<Component, ComponentList<any, any>>) => void;
   clickOnIndex: (componentList: ComponentList<any, any>, index: number) => void;
   // Actions

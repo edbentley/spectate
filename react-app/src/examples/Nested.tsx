@@ -7,13 +7,13 @@ import { newEffect } from "../core/effects";
 import { newText } from "../core/variables";
 
 const appSpec = (newSpec: NewSpec) => {
-  const UsernameInput = newInput();
   const UsernameText = newText();
+  const UsernameInput = newInput(UsernameText);
 
   newSpec("Can type username", ({ clickOn, enterText }) => {
     clickOn(UsernameInput);
 
-    enterText(UsernameText, "hello");
+    enterText("hello");
   });
 
   return {

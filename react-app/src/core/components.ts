@@ -1,4 +1,4 @@
-import { Variable, VariableList } from "./variables";
+import { TextVar, Variable, VariableList } from "./variables";
 
 export type Component = Input | Button | ComponentList<Component, Variable>;
 export interface ComponentList<C extends Component, V extends Variable> {
@@ -8,6 +8,8 @@ export interface ComponentList<C extends Component, V extends Variable> {
 }
 export type Input = {
   type: "input";
+  // Connected variable, not used in lists
+  connectedVar?: TextVar;
   inputType?: "text" | "number" | "password" | "email";
 };
 export type Button = { type: "button" };
@@ -21,10 +23,22 @@ export const newComponentList = <C extends Component, V extends Variable>(
   connectedVariable: variableList,
 });
 
-export const newInput = (opts?: { inputType?: Input["inputType"] }): Input => ({
-  ...opts,
-  type: "input",
-});
+export const newInput = (
+  optsOrConnectedVar?:
+    | {
+        connectedVar?: TextVar;
+        inputType?: Input["inputType"];
+      }
+    | TextVar
+): Input =>
+  !optsOrConnectedVar
+    ? { type: "input" }
+    : "type" in optsOrConnectedVar
+    ? { type: "input", connectedVar: optsOrConnectedVar }
+    : {
+        ...optsOrConnectedVar,
+        type: "input",
+      };
 export const newButton = (): Button => ({ type: "button" });
 
 export function isComponent(specField: {

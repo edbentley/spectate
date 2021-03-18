@@ -23,8 +23,8 @@ export function parseSpec<Spec extends SpecBase>(
     events[index].push({ type: "doEffect", effect });
   };
 
-  const enterText = (index: number) => (text: TextVar, example: string) => {
-    events[index].push({ type: "enterText", text, example });
+  const enterText = (index: number) => (example: string) => {
+    events[index].push({ type: "enterText", example });
   };
 
   const clickOn = (index: number) => (component: Component) => {
