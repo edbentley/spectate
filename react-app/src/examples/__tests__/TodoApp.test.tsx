@@ -48,12 +48,24 @@ test("Will not create card with empty text", () => {
 
   render(<TodoApp />);
 
+  const newCardInput = screen.getByLabelText("New Card");
   const addButton = screen.getByText("Add");
 
+  // Add empty card
   fireEvent.click(addButton);
 
   // No card added
-  expect(screen.queryByText("X")).toBe(null);
+  expect(screen.queryAllByText("X").length).toBe(0);
+
+  // Try adding a card
+  fireEvent.change(newCardInput, { target: { value: "Feed the cat" } });
+  fireEvent.click(addButton);
+
+  // Now add empty card
+  fireEvent.click(addButton);
+
+  // Still only 1 card added
+  expect(screen.queryAllByText("X").length).toBe(1);
 
   expect(warnSpy).not.toHaveBeenCalled();
 });

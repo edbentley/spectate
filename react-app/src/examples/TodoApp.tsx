@@ -9,9 +9,6 @@ import { newEffect } from "../core/effects";
 const mySpec = (newSpec: NewSpec) => {
   const NewCardInput = newInput();
   const NewCardText = newText();
-  const PrevCardText1 = newText();
-  const PrevCardText2 = newText();
-  const PrevCardText3 = newText();
 
   const CardsList = newVarList(newText());
 
@@ -36,9 +33,6 @@ const mySpec = (newSpec: NewSpec) => {
 
       equals(CardsList, [NewCardText]);
 
-      // Store for later
-      equals(PrevCardText1, NewCardText);
-
       equals(NewCardText, "");
 
       // 2nd time
@@ -48,10 +42,7 @@ const mySpec = (newSpec: NewSpec) => {
 
       clickOn(AddButton);
 
-      equals(CardsList, [PrevCardText1, NewCardText]);
-
-      // Store for later
-      equals(PrevCardText2, NewCardText);
+      equals(CardsList, ["Wash the dishes", NewCardText]);
 
       equals(NewCardText, "");
 
@@ -62,10 +53,7 @@ const mySpec = (newSpec: NewSpec) => {
 
       clickOn(AddButton);
 
-      equals(CardsList, [PrevCardText1, PrevCardText2, NewCardText]);
-
-      // Store for later
-      equals(PrevCardText3, NewCardText);
+      equals(CardsList, ["Wash the dishes", "Clean the kitchen", NewCardText]);
 
       equals(NewCardText, "");
 
@@ -76,7 +64,7 @@ const mySpec = (newSpec: NewSpec) => {
       // Log the value on the card
       doEffect(LogCard);
 
-      equals(CardsList, [PrevCardText1, PrevCardText3]);
+      equals(CardsList, ["Wash the dishes", "Feed the cat"]);
 
       // Add another
 
@@ -85,7 +73,7 @@ const mySpec = (newSpec: NewSpec) => {
 
       clickOn(AddButton);
 
-      equals(CardsList, [PrevCardText1, PrevCardText3, NewCardText]);
+      equals(CardsList, ["Wash the dishes", "Feed the cat", NewCardText]);
 
       equals(NewCardText, "");
     }
@@ -108,9 +96,6 @@ const mySpec = (newSpec: NewSpec) => {
     NewCardText,
     CardsList,
     AddButton,
-    PrevCardText1,
-    PrevCardText2,
-    PrevCardText3,
     RemoveButtonsList,
   };
 };

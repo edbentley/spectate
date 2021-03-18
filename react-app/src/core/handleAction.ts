@@ -29,7 +29,10 @@ export function handleActionGeneratingModel<Spec extends SpecBase>(
   specDescriptions: string[]
 ): {
   specState: SpecState<Spec>;
-  listBehaviours?: ListBehaviourAddResult | ListBehaviourRemoveResult;
+  listBehaviours?:
+    | ListBehaviourAddResult
+    | ListBehaviourRemoveResult
+    | ListBehaviourNothingResult;
 } {
   const getPosString = () => formatEventPosition(position, specDescriptions);
 
@@ -67,7 +70,23 @@ export function handleActionGeneratingModel<Spec extends SpecBase>(
         const prevValueStart = prevValue[0];
         const prevValueEnd = prevValue[prevValue.length - 1];
 
-        if (newValue.length === 0) {
+        if (newValue.length === prevValue.length) {
+          // Arrays are the same length
+          // If all values the same, it's a no-op
+          if (
+            newValue.length === 0 ||
+            newValue.every((val, index) => val === prevValue[index])
+          ) {
+            // Return early
+            return {
+              specState,
+              listBehaviours: { type: "doNothing", name: variableName },
+            };
+          } else {
+            // Values different so array was overwritten
+            behaviours.add.add("overwrite");
+          }
+        } else if (newValue.length === 0) {
           // Set empty array
 
           if (prevValue.length > 1) {
@@ -80,9 +99,6 @@ export function handleActionGeneratingModel<Spec extends SpecBase>(
             behaviours.remove.add("removeFromIndex");
             behaviours.remove.add("removeFromStart");
           }
-        } else if (newValue.length === prevValue.length) {
-          // Arrays are the same length so just overwrite
-          behaviours.add.add("overwrite");
         } else if (newValue.length === prevValue.length + 1) {
           // We added to array
 
@@ -291,4 +307,8 @@ type ListBehaviourRemoveResult = {
   behaviours: Set<ListRemoveBehaviour>;
   name: string;
   index?: number;
+};
+type ListBehaviourNothingResult = {
+  type: "doNothing";
+  name: string;
 };

@@ -83,12 +83,13 @@ export function getEventsModel<Spec extends SpecBase>(
   const variableListBehaviour: EventsModel<Spec>["variableListBehaviour"] = {};
 
   events.forEach((specEvents, specIndex) => {
-    specEvents.reduce(
-      (
-        { specState: prevSpecState, listContext: prevListContext },
-        event,
-        eventIndex
-      ) => {
+    let currSpecState = getInitSpecState(spec);
+    let currListContext = null as ListContext;
+
+    // First pass through events: Add list behaviours first to get more
+    // information for events model
+    const specEventsWithBehaviour = specEvents.map(
+      (event, eventIndex, currSpecEventsWithBehaviour) => {
         const {
           specState,
           listContext,
@@ -97,8 +98,50 @@ export function getEventsModel<Spec extends SpecBase>(
           event,
           eventIndex,
           specIndex,
+          currSpecState,
+          currSpecEventsWithBehaviour,
+          // Use dummy vars for events model since we don't want to add to them
+          // for real until we've done the first pass
+          {},
+          {},
+          {},
+          {},
+          components,
+          variables,
+          currListContext,
+          specDescriptions
+        );
+        currSpecState = specState;
+        currListContext = listContext;
+
+        if (
+          replacedEvent &&
+          event.type === "equals" &&
+          replacedEvent.type === "equals"
+        ) {
+          return {
+            ...event,
+            behaviour: replacedEvent.behaviour,
+          };
+        }
+        return event;
+      }
+    );
+
+    // Second pass: add to events models
+    specEventsWithBehaviour.reduce(
+      (
+        { specState: prevSpecState, listContext: prevListContext },
+        event,
+        eventIndex,
+        currSpecEventsWithBehaviour
+      ) =>
+        updateStateAndUpdateModel(
+          event,
+          eventIndex,
+          specIndex,
           prevSpecState,
-          specEvents,
+          currSpecEventsWithBehaviour,
           buttonEvents,
           inputEvents,
           componentListEvents,
@@ -107,18 +150,7 @@ export function getEventsModel<Spec extends SpecBase>(
           variables,
           prevListContext,
           specDescriptions
-        );
-        if (
-          replacedEvent &&
-          event.type === "equals" &&
-          replacedEvent.type === "equals"
-        ) {
-          // We're going to brutally mutate the event. This is the easiest way
-          // to ensure it's updated in the model.
-          event.behaviour = replacedEvent.behaviour;
-        }
-        return { specState, listContext };
-      },
+        ),
       { specState: getInitSpecState(spec), listContext: null as ListContext }
     );
   });
@@ -380,7 +412,9 @@ function updateStateAndUpdateModel<Spec extends SpecBase>(
           const addBehaviours = compareBehaviours(
             variableListBehaviour[name].add,
             listBehaviours.behaviours,
-            name
+            name,
+            position,
+            specDescriptions
           );
           variableListBehaviour[name].add = addBehaviours;
 
@@ -399,7 +433,9 @@ function updateStateAndUpdateModel<Spec extends SpecBase>(
           const removeBehaviours = compareBehaviours(
             variableListBehaviour[name].remove,
             listBehaviours.behaviours,
-            name
+            name,
+            position,
+            specDescriptions
           );
           variableListBehaviour[name].remove = removeBehaviours;
 
@@ -410,6 +446,17 @@ function updateStateAndUpdateModel<Spec extends SpecBase>(
               ...event,
               behaviour: {
                 type: "shouldRemove",
+              },
+            },
+          };
+        } else if (listBehaviours.type === "doNothing") {
+          return {
+            specState: newState,
+            listContext,
+            replacedEvent: {
+              ...event,
+              behaviour: {
+                type: "doNothing",
               },
             },
           };

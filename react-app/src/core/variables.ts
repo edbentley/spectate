@@ -1,3 +1,4 @@
+import { EventPosition, formatEventPosition } from "./events";
 import { setIntersection } from "./utils";
 
 export type Variable = TextVar | VariableList<Variable>;
@@ -78,7 +79,9 @@ export function compareBehaviours<
 >(
   existingBehaviours: Set<Behaviour>,
   potentialBehaviours: Set<Behaviour>,
-  variableName: string
+  variableName: string,
+  position: EventPosition,
+  specDescriptions: string[]
 ): Set<Behaviour> {
   if (existingBehaviours.size === 0) {
     return potentialBehaviours;
@@ -90,7 +93,12 @@ export function compareBehaviours<
   );
 
   if (newBehaviours.size === 0) {
-    throw Error(`Inconsistent list behaviours defined for ${variableName}`);
+    throw Error(`Inconsistent list behaviours defined for ${variableName}.
+
+Previous behaviours: ${[...existingBehaviours].join(", ")}
+New behaviours: ${[...potentialBehaviours].join(", ")}
+
+in ${formatEventPosition(position, specDescriptions)}`);
   }
 
   return newBehaviours;

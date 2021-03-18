@@ -26,6 +26,7 @@ export type SpecEventAction =
       value: VariableComparitor<Variable>;
       behaviour?:
         | { type: "shouldAdd"; listEqualsVar: VariableComparitor<Variable> }
+        | { type: "doNothing" }
         | { type: "shouldRemove" };
     };
 
@@ -41,6 +42,8 @@ export function actionsEqual<Spec extends SpecBase>(
 ): boolean {
   if (actionsA.length !== actionsB.length) return false;
 
+  // Return false in the loop if they're NOT similar at any point. Otherwise
+  // they must be similar.
   for (let i = 0; i < actionsA.length; i++) {
     const actionA = actionsA[i];
     const actionB = actionsB[i];
@@ -68,31 +71,37 @@ export function actionsEqual<Spec extends SpecBase>(
         actionB.behaviour !== undefined
       ) {
         // Array operations are equivalent if they have the same behaviour
-        return actionA.behaviour?.type === actionB.behaviour?.type;
+        if (actionA.behaviour.type !== actionB.behaviour.type) {
+          return false;
+        }
+      } else {
+        if (actionA.variable !== actionB.variable) {
+          return false;
+        }
+
+        if (strict) {
+          if (actionA.value !== actionB.value) {
+            return false;
+          }
+        } else {
+          // Check if value is the same (i.e. similarity score of 1).
+
+          const actionAValue = getValueFromState(
+            actionA.value,
+            variables,
+            specState
+          );
+          const actionBValue = getValueFromState(
+            actionB.value,
+            variables,
+            specState
+          );
+
+          if (!stateFieldsSimilar(actionAValue, actionBValue)) {
+            return false;
+          }
+        }
       }
-
-      if (actionA.variable !== actionB.variable) {
-        return false;
-      }
-
-      if (strict) {
-        return actionA.value === actionB.value;
-      }
-
-      // Check if value is the same (i.e. similarity score of 1).
-
-      const actionAValue = getValueFromState(
-        actionA.value,
-        variables,
-        specState
-      );
-      const actionBValue = getValueFromState(
-        actionB.value,
-        variables,
-        specState
-      );
-
-      return stateFieldsSimilar(actionAValue, actionBValue);
     }
   }
 
