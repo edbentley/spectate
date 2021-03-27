@@ -33,7 +33,11 @@ export function parseSpec<Spec extends SpecBase>(
       effect,
       example,
     };
-    events[index].push({ type: "getEffect", result: effectResult });
+    events[index].push({
+      type: "getEffect",
+      result: effectResult,
+      options: [],
+    });
     return effectResult;
   };
 

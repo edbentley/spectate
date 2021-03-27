@@ -1,6 +1,11 @@
 import { Button, Component, getComponentName } from "./components";
 import { SpecBase } from "./spec";
-import { getInitSpecState, SpecState, statesEqual } from "./state";
+import {
+  getInitSpecState,
+  SpecState,
+  stateFieldsSimilar,
+  statesEqual,
+} from "./state";
 import {
   actionsEqual,
   EventPosition,
@@ -206,7 +211,12 @@ function updateStateAndUpdateModel<Spec extends SpecBase>(
         case "button":
           // We need to add this event to buttonEvents
 
-          const actions = getNextActions(specEvents, eventIndex);
+          const actions = getNextActions(
+            specEvents,
+            specIndex,
+            eventIndex,
+            specDescriptions
+          );
 
           const buttonName = getComponentName(components, event.component);
           const existingButtonEvents = buttonEvents[buttonName];
@@ -255,6 +265,61 @@ function updateStateAndUpdateModel<Spec extends SpecBase>(
             ) {
               // Actions are equivalent, so just add it to positions
               existing.positions.push(position);
+
+              // Add to the options array
+              const lastExistingEvent =
+                existing.actions[existing.actions.length - 1];
+              const lastNewEvent = actions[actions.length - 1];
+              if (
+                lastExistingEvent?.type === "getEffect" &&
+                lastNewEvent?.type === "getEffect"
+              ) {
+                // Make sure there are no conflicts in options
+
+                let conflictingPositions:
+                  | [EventPosition, EventPosition]
+                  | null = null;
+                lastExistingEvent.options.forEach((lastExistingEventOption) => {
+                  lastNewEvent.options.forEach((lastNewEventOption) => {
+                    if (
+                      lastExistingEventOption.resultVal !== undefined &&
+                      lastNewEventOption.resultVal !== undefined &&
+                      stateFieldsSimilar(
+                        lastExistingEventOption.resultVal,
+                        lastNewEventOption.resultVal
+                      ) &&
+                      !actionsEqual(
+                        lastExistingEventOption.actions,
+                        lastNewEventOption.actions,
+                        variables,
+                        specState,
+                        resultState,
+                        false
+                      )
+                    ) {
+                      conflictingPositions = [
+                        lastExistingEventOption.position,
+                        lastNewEventOption.position,
+                      ];
+                      return;
+                    }
+                  });
+                });
+                if (conflictingPositions !== null) {
+                  const posStr = formatEventPosition(
+                    conflictingPositions[0],
+                    specDescriptions
+                  );
+                  const conflictPosStr = formatEventPosition(
+                    conflictingPositions[1],
+                    specDescriptions
+                  );
+                  throw Error(
+                    `Conflicting actions for the same getEffect result in ${conflictPosStr} and ${posStr}`
+                  );
+                }
+                lastExistingEvent.options.push(...lastNewEvent.options);
+              }
             } else {
               const conflictPos = existing.positions[0];
               const conflictPosStr = formatEventPosition(
@@ -299,7 +364,12 @@ function updateStateAndUpdateModel<Spec extends SpecBase>(
         case "button":
           // We need to add this event to buttonEvents
 
-          const actions = getNextActions(specEvents, eventIndex);
+          const actions = getNextActions(
+            specEvents,
+            specIndex,
+            eventIndex,
+            specDescriptions
+          );
 
           const listName = getComponentName(components, event.component);
           const existingListEvents = buttonListEvents[listName];

@@ -19,10 +19,7 @@ export type SpecEventUserInput = {
 };
 export type SpecEventAction =
   | { type: "doEffect"; effect: Effect<EffectVal> }
-  | {
-      type: "getEffect";
-      result: EffectResult<EffectVal>;
-    }
+  | GetEffectAction
   | {
       type: "equals";
       variable: Variable;
@@ -37,6 +34,18 @@ export type SpecEventAction =
         | { type: "doNothing" }
         | { type: "shouldRemove" };
     };
+
+type GetEffectAction = {
+  type: "getEffect";
+  result: EffectResult<EffectVal>;
+  // Options are populated in model
+  options: {
+    // Result state for relevant effect at this point
+    resultVal: EffectVal;
+    actions: SpecEventAction[];
+    position: EventPosition;
+  }[];
+};
 
 export type EventContext = { index?: number };
 
@@ -132,26 +141,76 @@ export function actionsEqual<Spec extends SpecBase>(
  */
 export function getNextActions(
   specEvents: SpecEvent[],
-  eventIndex: number
+  specIndex: number,
+  eventIndex: number,
+  specDescriptions: string[]
 ): SpecEventAction[] {
   // We're the last event
   if (eventIndex === specEvents.length - 1) return [];
 
-  // Get index of first element not an action
+  // Get index of first element not an action, or getEffect which will branch
   let nextNotActionEventIndex = specEvents
     .slice(eventIndex + 1)
-    .findIndex((event) => !isAction(event));
+    .findIndex((event) => !isAction(event) || event.type === "getEffect");
 
   // All proceeding events are actions
   if (nextNotActionEventIndex === -1) {
     nextNotActionEventIndex = specEvents.length;
   }
 
-  return specEvents.slice(
+  const nextActions = specEvents.slice(
     eventIndex + 1,
     // Note: End index is exclusive
     eventIndex + 1 + nextNotActionEventIndex
   ) as SpecEventAction[];
+
+  const additionalActions: SpecEventAction[] = [];
+
+  const lastEventIndex = eventIndex + 1 + nextNotActionEventIndex;
+  const lastEvent = specEvents[lastEventIndex];
+  if (lastEvent?.type === "getEffect") {
+    // Include the getEffect we ended with and its following actions
+    const nestedNextActions = getNextActions(
+      specEvents,
+      specIndex,
+      lastEventIndex,
+      specDescriptions
+    );
+
+    // We currently don't handle nested getEffects so throw an error instead of
+    // undefined behaviour
+    const nestedGetEffectIndex = nestedNextActions.findIndex(
+      (action) => action.type === "getEffect"
+    );
+    if (nestedGetEffectIndex !== -1) {
+      const posStr = formatEventPosition(
+        {
+          specIndex,
+          eventIndex: nestedGetEffectIndex + lastEventIndex + eventIndex + 1,
+          eventType: "getEffect",
+        },
+        specDescriptions
+      );
+      throw Error(`Can't put two "getEffect" events together in ${posStr}`);
+    }
+
+    additionalActions.push({
+      ...lastEvent,
+      options: [
+        {
+          resultVal: lastEvent.result.example,
+          actions: nestedNextActions,
+          position: {
+            specIndex,
+            eventType: "getEffect",
+            eventIndex: lastEventIndex,
+          },
+        },
+      ],
+    });
+  }
+
+  return [...nextActions, ...additionalActions];
 }
 
 export function isAction(specEvent: SpecEvent): specEvent is SpecEventAction {
@@ -179,3 +238,22 @@ export type EventPosition = {
   eventIndex: number;
   eventType: SpecEvent["type"];
 };
+
+/**
+ * Chooses the getEffect branch based on the result
+ */
+export function getEffectActions(action: GetEffectAction, result: EffectVal) {
+  const chosenBranch = action.options.find(
+    (option) =>
+      option.resultVal !== undefined &&
+      result !== undefined &&
+      stateFieldsSimilar(option.resultVal, result)
+  );
+
+  if (!chosenBranch) {
+    console.warn(`Could not find actions based on effect result`);
+    return [];
+  }
+
+  return chosenBranch.actions;
+}

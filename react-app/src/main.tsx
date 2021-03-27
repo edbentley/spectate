@@ -1,7 +1,7 @@
 import React from "react";
 import ReactDOM from "react-dom";
 import "./index.css";
-import App from "./examples/RandomNumber";
+import App from "./examples/FetchUser";
 
 ReactDOM.render(
   <React.StrictMode>

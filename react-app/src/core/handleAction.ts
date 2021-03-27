@@ -4,6 +4,7 @@ import {
   EventContext,
   EventPosition,
   formatEventPosition,
+  getEffectActions,
   SpecEventAction,
 } from "./events";
 import {
@@ -256,10 +257,26 @@ export function handleActionRunningApp<Spec extends SpecBase>(
         >;
       }
       const result = action.result.effect.fn(getVal, eventContext);
-      return {
-        specState,
-        resultState: addEffectResult(resultState, action.result, result),
-      };
+      const newResultState = addEffectResult(
+        resultState,
+        action.result,
+        result
+      );
+
+      const branchActions = getEffectActions(action, result);
+
+      return branchActions.reduce(
+        (prev, branchAction) =>
+          handleActionRunningApp(
+            branchAction,
+            prev.specState,
+            prev.resultState,
+            variables,
+            eventContext,
+            listBehaviour
+          ),
+        { specState, resultState: newResultState }
+      );
     }
 
     case "equals": {
