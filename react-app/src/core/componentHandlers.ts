@@ -11,12 +11,16 @@ import { getVariableName, isVariable, Variable } from "./variables";
 import { getEventsModel } from "./model";
 import { handleActionRunningApp } from "./handleAction";
 import { replaceArray } from "./utils";
+import { EffectResultState } from "./effects";
 
 export interface SpecComponentHandlers<Spec extends SpecBase> {
   // Record of key: button name, val: onClick function determined using similarity scores
   buttons: Record<
     string,
-    (appState: SpecState<Spec>) => { onClick: () => void }
+    (
+      appSpecState: SpecState<Spec>,
+      appResultState: EffectResultState
+    ) => { onClick: () => void }
   >;
 
   // Record of key: input name, val: onChange function
@@ -32,7 +36,8 @@ export interface SpecComponentHandlers<Spec extends SpecBase> {
   lists: Record<
     string,
     (
-      appState: SpecState<Spec>
+      appSpecState: SpecState<Spec>,
+      appResultState: EffectResultState
     ) =>
       | { onClick: (index: number) => void }
       | {
@@ -51,6 +56,9 @@ export function getComponentHandlers<Spec extends SpecBase>(
   events: Events,
   updateSpecState: (
     update: (specState: SpecState<Spec>) => SpecState<Spec>
+  ) => void,
+  updateResultState: (
+    update: (resultState: EffectResultState) => EffectResultState
   ) => void,
   specDescriptions: string[]
 ): SpecComponentHandlers<Spec> {
@@ -92,7 +100,7 @@ export function getComponentHandlers<Spec extends SpecBase>(
 
   components.forEach(({ name, component }) => {
     if (component.type === "button") {
-      buttons[name] = (appState) => ({
+      buttons[name] = (appSpecState, appResultState) => ({
         onClick: () => {
           // Get button's potential events
           const relevantEvents = eventsModel.buttonEvents[name];
@@ -100,7 +108,7 @@ export function getComponentHandlers<Spec extends SpecBase>(
           // Then the one closest to current state
           const bestEvent = getRelevantEvent(
             relevantEvents,
-            appState,
+            appSpecState,
             specDescriptions
           );
 
@@ -109,33 +117,44 @@ export function getComponentHandlers<Spec extends SpecBase>(
           }
 
           // Then run that event's actions
-          const nextAppState = bestEvent.actions.reduce((currState, action) => {
-            if (
-              action.type === "equals" &&
-              action.variable.type === "variableList"
-            ) {
-              const behaviour =
-                eventsModel.variableListBehaviour[
-                  getVariableName(variables, action.variable)
-                ];
+          const nextAppState = bestEvent.actions.reduce(
+            ({ specState, resultState }, action) => {
+              if (
+                action.type === "equals" &&
+                action.variable.type === "variableList"
+              ) {
+                const behaviour =
+                  eventsModel.variableListBehaviour[
+                    getVariableName(variables, action.variable)
+                  ];
 
-              // These are the final behaviours
-              const addBehaviour = [...behaviour.add][0];
-              const removeBehaviour = [...behaviour.remove][0];
+                // These are the final behaviours
+                const addBehaviour = [...behaviour.add][0];
+                const removeBehaviour = [...behaviour.remove][0];
 
+                return handleActionRunningApp(
+                  action,
+                  specState,
+                  resultState,
+                  variables,
+                  {},
+                  { add: addBehaviour, remove: removeBehaviour }
+                );
+              }
               return handleActionRunningApp(
                 action,
-                currState,
+                specState,
+                resultState,
                 variables,
-                {},
-                { add: addBehaviour, remove: removeBehaviour }
+                {}
               );
-            }
-            return handleActionRunningApp(action, currState, variables, {});
-          }, appState);
+            },
+            { specState: appSpecState, resultState: appResultState }
+          );
 
           // Then update with resulting event's state changes
-          updateSpecState(() => nextAppState);
+          updateSpecState(() => nextAppState.specState);
+          updateResultState(() => nextAppState.resultState);
         },
       });
     } else if (component.type === "input") {
@@ -158,7 +177,7 @@ export function getComponentHandlers<Spec extends SpecBase>(
         component.connectedVariable
       );
 
-      lists[name] = (appState) => {
+      lists[name] = (appSpecState, appResultState) => {
         const componentType = component.component.type;
 
         if (componentType === "input") {
@@ -194,7 +213,7 @@ export function getComponentHandlers<Spec extends SpecBase>(
 
               const bestEvent = getRelevantEvent(
                 relevantEvents,
-                appState,
+                appSpecState,
                 specDescriptions
               );
 
@@ -203,19 +222,21 @@ export function getComponentHandlers<Spec extends SpecBase>(
               }
 
               const nextAppState = bestEvent.actions.reduce(
-                (currState, action) =>
+                ({ specState, resultState }, action) =>
                   handleActionRunningApp(
                     action,
-                    currState,
+                    specState,
+                    resultState,
                     variables,
                     { index },
                     { add: addBehaviour, remove: removeBehaviour }
                   ),
-                appState
+                { specState: appSpecState, resultState: appResultState }
               );
 
               // Then update with resulting event's state changes
-              updateSpecState(() => nextAppState);
+              updateSpecState(() => nextAppState.specState);
+              updateResultState(() => nextAppState.resultState);
             },
           };
         }

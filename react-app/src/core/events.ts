@@ -1,5 +1,5 @@
 import { Component, ComponentList } from "./components";
-import { Effect } from "./effects";
+import { Effect, EffectResult, EffectResultState, EffectVal } from "./effects";
 import { SpecBase } from "./spec";
 import { getValueFromState, SpecState, stateFieldsSimilar } from "./state";
 import { Variable, VariableComparitor } from "./variables";
@@ -18,13 +18,22 @@ export type SpecEventUserInput = {
   example: string;
 };
 export type SpecEventAction =
-  | { type: "doEffect"; effect: Effect }
+  | { type: "doEffect"; effect: Effect<EffectVal> }
+  | {
+      type: "getEffect";
+      result: EffectResult<EffectVal>;
+    }
   | {
       type: "equals";
       variable: Variable;
-      value: VariableComparitor<Variable>;
+      value: VariableComparitor<Variable> | EffectResult<EffectVal>;
       behaviour?:
-        | { type: "shouldAdd"; listEqualsVar: VariableComparitor<Variable> }
+        | {
+            type: "shouldAdd";
+            listEqualsVar:
+              | VariableComparitor<Variable>
+              | EffectResult<EffectVal>;
+          }
         | { type: "doNothing" }
         | { type: "shouldRemove" };
     };
@@ -36,6 +45,7 @@ export function actionsEqual<Spec extends SpecBase>(
   actionsB: SpecEventAction[],
   variables: { name: string; variable: Variable }[],
   specState: SpecState<Spec>,
+  resultState: EffectResultState,
   // Whether equals compares similarity or exact values
   strict: boolean
 ): boolean {
@@ -58,6 +68,14 @@ export function actionsEqual<Spec extends SpecBase>(
       actionA.type === "doEffect" &&
       actionB.type === "doEffect" &&
       actionA.effect !== actionB.effect
+    ) {
+      return false;
+    }
+
+    if (
+      actionA.type === "getEffect" &&
+      actionB.type === "getEffect" &&
+      actionA.result.effect !== actionB.result.effect
     ) {
       return false;
     }
@@ -88,12 +106,14 @@ export function actionsEqual<Spec extends SpecBase>(
           const actionAValue = getValueFromState(
             actionA.value,
             variables,
-            specState
+            specState,
+            resultState
           );
           const actionBValue = getValueFromState(
             actionB.value,
             variables,
-            specState
+            specState,
+            resultState
           );
 
           if (!stateFieldsSimilar(actionAValue, actionBValue)) {
@@ -135,7 +155,11 @@ export function getNextActions(
 }
 
 export function isAction(specEvent: SpecEvent): specEvent is SpecEventAction {
-  return specEvent.type === "equals" || specEvent.type === "doEffect";
+  return (
+    specEvent.type === "equals" ||
+    specEvent.type === "doEffect" ||
+    specEvent.type === "getEffect"
+  );
 }
 
 export function formatEventPosition(

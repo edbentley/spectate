@@ -1,9 +1,9 @@
 import { Component, ComponentList } from "./components";
-import { NewSpec, SpecBase } from "./spec";
+import { NewSpec, SpecBase, SpecFn } from "./spec";
 import { getInitSpecState, SpecState } from "./state";
 import { Events } from "./events";
-import { TextVar, Variable, VariableComparitor } from "./variables";
-import { Effect } from "./effects";
+import { Variable } from "./variables";
+import { Effect, EffectResultState } from "./effects";
 
 /**
  * Convert each spec function into an array of Events. Also returns the initial
@@ -15,12 +15,26 @@ export function parseSpec<Spec extends SpecBase>(
   spec: Spec;
   events: Events;
   initSpecState: SpecState<Spec>;
+  initEffectResultState: EffectResultState;
   specDescriptions: string[];
 } {
   const events: Events = [];
 
-  const doEffect = (index: number) => (effect: Effect) => {
+  const doEffect = (index: number) => (effect: Effect<void>) => {
     events[index].push({ type: "doEffect", effect });
+  };
+
+  const getEffect = (index: number): Parameters<SpecFn>[0]["getEffect"] => (
+    effect,
+    example
+  ) => {
+    const effectResult = {
+      type: "effectResult" as const,
+      effect,
+      example,
+    };
+    events[index].push({ type: "getEffect", result: effectResult });
+    return effectResult;
   };
 
   const enterText = (index: number) => (example: string) => {
@@ -42,9 +56,9 @@ export function parseSpec<Spec extends SpecBase>(
     });
   };
 
-  const equals = (index: number) => <V extends Variable>(
-    variable: V,
-    value: VariableComparitor<V>
+  const equals = (index: number): Parameters<SpecFn>[0]["equals"] => (
+    variable,
+    value
   ) => {
     events[index].push({ type: "equals", variable, value });
   };
@@ -57,6 +71,7 @@ export function parseSpec<Spec extends SpecBase>(
     specDescriptions.push(description);
     specFn({
       doEffect: doEffect(index),
+      getEffect: getEffect(index),
       enterText: enterText(index),
       clickOn: clickOn(index),
       clickOnIndex: clickOnIndex(index),
@@ -69,6 +84,7 @@ export function parseSpec<Spec extends SpecBase>(
   return {
     spec,
     initSpecState: getInitSpecState(spec),
+    initEffectResultState: [],
     events,
     specDescriptions,
   };

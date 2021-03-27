@@ -15,6 +15,8 @@ import {
   VariableComparitor,
   VariableValue,
 } from "./variables";
+import { EffectResult, EffectResultState, EffectVal } from "./effects";
+import { replaceArray } from "./utils";
 
 /**
  * Returns next state based on action, and any list behaviours it has
@@ -23,12 +25,14 @@ import {
 export function handleActionGeneratingModel<Spec extends SpecBase>(
   action: SpecEventAction,
   specState: SpecState<Spec>,
+  resultState: EffectResultState,
   variables: { name: string; variable: Variable }[],
   position: EventPosition,
   eventContext: EventContext,
   specDescriptions: string[]
 ): {
   specState: SpecState<Spec>;
+  resultState: EffectResultState;
   listBehaviours?:
     | ListBehaviourAddResult
     | ListBehaviourRemoveResult
@@ -39,13 +43,29 @@ export function handleActionGeneratingModel<Spec extends SpecBase>(
   switch (action.type) {
     case "doEffect":
       // No-op
-      return { specState };
+      return { specState, resultState };
+
+    case "getEffect":
+      // Set the result state to the example provided
+      return {
+        specState,
+        resultState: addEffectResult(
+          resultState,
+          action.result,
+          action.result.example
+        ),
+      };
 
     case "equals": {
       const { variable, value } = action;
       const variableName = getVariableName(variables, variable);
 
-      const newValue = getValueFromState(value, variables, specState);
+      const newValue = getValueFromState(
+        value,
+        variables,
+        specState,
+        resultState
+      );
 
       const behaviours: ListBehaviours = {
         add: new Set(),
@@ -80,6 +100,7 @@ export function handleActionGeneratingModel<Spec extends SpecBase>(
             // Return early
             return {
               specState,
+              resultState,
               listBehaviours: { type: "doNothing", name: variableName },
             };
           } else {
@@ -164,6 +185,7 @@ export function handleActionGeneratingModel<Spec extends SpecBase>(
               [variableName]: newValue,
             },
           },
+          resultState,
           listBehaviours:
             behaviours.add.size > 0
               ? {
@@ -193,6 +215,7 @@ export function handleActionGeneratingModel<Spec extends SpecBase>(
             [variableName]: newValue,
           },
         },
+        resultState,
       };
     }
   }
@@ -204,12 +227,16 @@ export function handleActionGeneratingModel<Spec extends SpecBase>(
 export function handleActionRunningApp<Spec extends SpecBase>(
   action: SpecEventAction,
   specState: SpecState<Spec>,
+  resultState: EffectResultState,
   variables: { name: string; variable: Variable }[],
   eventContext: EventContext,
   listBehaviour?: { add: ListAddBehaviour; remove: ListRemoveBehaviour }
-): SpecState<Spec> {
+): {
+  specState: SpecState<Spec>;
+  resultState: EffectResultState;
+} {
   switch (action.type) {
-    case "doEffect":
+    case "doEffect": {
       function getVal<V extends Variable>(variable: V) {
         const variableName = getVariableName(variables, variable);
         return (specState.state[variableName] as unknown) as VariableValue<
@@ -217,7 +244,23 @@ export function handleActionRunningApp<Spec extends SpecBase>(
         >;
       }
       action.effect.fn(getVal, eventContext);
-      return specState;
+      return { specState, resultState };
+    }
+
+    case "getEffect": {
+      // Set the result state to the value returned by the effect
+      function getVal<V extends Variable>(variable: V) {
+        const variableName = getVariableName(variables, variable);
+        return (specState.state[variableName] as unknown) as VariableValue<
+          typeof variable
+        >;
+      }
+      const result = action.result.effect.fn(getVal, eventContext);
+      return {
+        specState,
+        resultState: addEffectResult(resultState, action.result, result),
+      };
+    }
 
     case "equals": {
       const { variable, value } = action;
@@ -234,7 +277,8 @@ export function handleActionRunningApp<Spec extends SpecBase>(
           const listEqualsVal = getValueFromState(
             listEqualsVar,
             variables,
-            specState
+            specState,
+            resultState
           ) as string[];
 
           let newArray: string[] = [];
@@ -249,11 +293,14 @@ export function handleActionRunningApp<Spec extends SpecBase>(
           }
 
           return {
-            ...specState,
-            state: {
-              ...specState.state,
-              [variableName]: newArray,
+            specState: {
+              ...specState,
+              state: {
+                ...specState.state,
+                [variableName]: newArray,
+              },
             },
+            resultState,
           };
         } else if (action.behaviour.type === "shouldRemove") {
           const behaviour = listBehaviour.remove;
@@ -271,26 +318,37 @@ export function handleActionRunningApp<Spec extends SpecBase>(
               : [];
 
           return {
-            ...specState,
-            state: {
-              ...specState.state,
-              [variableName]: newArray,
+            specState: {
+              ...specState,
+              state: {
+                ...specState.state,
+                [variableName]: newArray,
+              },
             },
+            resultState,
           };
         }
-        return specState;
+        return { specState, resultState };
       }
 
       // Other equals cases are a simple set the state
 
-      const newValue = getValueFromState(value, variables, specState);
+      const newValue = getValueFromState(
+        value,
+        variables,
+        specState,
+        resultState
+      );
 
       return {
-        ...specState,
-        state: {
-          ...specState.state,
-          [variableName]: newValue,
+        specState: {
+          ...specState,
+          state: {
+            ...specState.state,
+            [variableName]: newValue,
+          },
         },
+        resultState,
       };
     }
   }
@@ -300,7 +358,7 @@ type ListBehaviourAddResult = {
   type: "add";
   behaviours: Set<ListAddBehaviour>;
   name: string;
-  listEqualsVar: VariableComparitor<Variable>;
+  listEqualsVar: VariableComparitor<Variable> | EffectResult<EffectVal>;
 };
 type ListBehaviourRemoveResult = {
   type: "remove";
@@ -312,3 +370,30 @@ type ListBehaviourNothingResult = {
   type: "doNothing";
   name: string;
 };
+
+function addEffectResult<Val extends EffectVal>(
+  resultState: EffectResultState,
+  result: EffectResult<Val>,
+  resultValue: Val
+): EffectResultState {
+  const existingResultStateIndex = resultState.findIndex(
+    (r) => r.effectResult.effect === result.effect
+  );
+  if (existingResultStateIndex !== -1) {
+    return replaceArray(
+      resultState,
+      {
+        ...resultState[existingResultStateIndex],
+        state: resultValue,
+      },
+      existingResultStateIndex
+    );
+  }
+  return [
+    ...resultState,
+    {
+      effectResult: result,
+      state: resultValue,
+    },
+  ];
+}

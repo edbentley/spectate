@@ -14,6 +14,7 @@ import {
   isComponent,
   ComponentList,
 } from "../core/components";
+import { EffectResultState } from "../core/effects";
 
 export type SpecProps<Spec> = {
   [K in keyof Spec]: SpecFieldProps<Spec[K]>;
@@ -34,25 +35,37 @@ type SpecFieldProps<Field> = Field extends Variable
 export function useSpec<Spec extends SpecBase>(
   getSpec: (newSpec: NewSpec) => Spec
 ): SpecProps<Spec> {
-  const { spec, events, initSpecState, specDescriptions } = useMemo(
-    () => parseSpec(getSpec),
-    [getSpec]
-  );
+  const {
+    spec,
+    events,
+    initSpecState,
+    initEffectResultState,
+    specDescriptions,
+  } = useMemo(() => parseSpec(getSpec), [getSpec]);
 
   const [specState, setSpecState] = useState(initSpecState);
+  const [resultState, setResultState] = useState(initEffectResultState);
 
   const componentHandlers = useMemo(
-    () => getComponentHandlers(spec, events, setSpecState, specDescriptions),
+    () =>
+      getComponentHandlers(
+        spec,
+        events,
+        setSpecState,
+        setResultState,
+        specDescriptions
+      ),
     [spec]
   );
 
-  return getProps(componentHandlers, spec, specState);
+  return getProps(componentHandlers, spec, specState, resultState);
 }
 
 function getProps<Spec extends SpecBase>(
   componentHandlers: SpecComponentHandlers<Spec>,
   spec: Spec,
-  specState: SpecState<Spec>
+  specState: SpecState<Spec>,
+  resultState: EffectResultState
 ): SpecProps<Spec> {
   const specProps: Partial<Record<keyof Spec, unknown>> = {};
 
@@ -64,6 +77,7 @@ function getProps<Spec extends SpecBase>(
         name,
         fieldValue,
         specState,
+        resultState,
         componentHandlers
       );
     } else if (isVariable(fieldValue)) {
@@ -82,11 +96,15 @@ function getComponentProps<Spec extends SpecBase>(
   name: string,
   component: Component,
   specState: SpecState<Spec>,
+  resultState: EffectResultState,
   componentHandlers: SpecComponentHandlers<Spec>
 ): HTMLElementProps | ((index: number) => HTMLElementProps) {
   switch (component.type) {
     case "button":
-      const buttonHandler = componentHandlers.buttons[name](specState);
+      const buttonHandler = componentHandlers.buttons[name](
+        specState,
+        resultState
+      );
 
       const buttonProps: React.ButtonHTMLAttributes<HTMLButtonElement> = {
         onClick: buttonHandler.onClick,
@@ -114,7 +132,7 @@ function getComponentProps<Spec extends SpecBase>(
 
     case "componentList":
       const componentType = component.component.type;
-      const handler = componentHandlers.lists[name](specState);
+      const handler = componentHandlers.lists[name](specState, resultState);
 
       if (componentType === "button" && "onClick" in handler) {
         return (index: number) => ({

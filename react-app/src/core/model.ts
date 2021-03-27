@@ -19,6 +19,7 @@ import {
 } from "./variables";
 import { handleActionGeneratingModel } from "./handleAction";
 import { replaceArray } from "./utils";
+import { EffectResultState } from "./effects";
 
 type EventsModel<Spec extends SpecBase> = {
   // Key is component name
@@ -68,6 +69,7 @@ export function getEventsModel<Spec extends SpecBase>(
 
   events.forEach((specEvents, specIndex) => {
     let currSpecState = getInitSpecState(spec);
+    let currResultState: EffectResultState = [];
     let currListContext = null as ListContext;
 
     // First pass through events: Add list behaviours first to get more
@@ -76,6 +78,7 @@ export function getEventsModel<Spec extends SpecBase>(
       (event, eventIndex, currSpecEventsWithBehaviour) => {
         const {
           specState,
+          resultState,
           listContext,
           replacedEvent,
         } = updateStateAndUpdateModel(
@@ -83,6 +86,7 @@ export function getEventsModel<Spec extends SpecBase>(
           eventIndex,
           specIndex,
           currSpecState,
+          currResultState,
           currSpecEventsWithBehaviour,
           // Use dummy vars for events model since we don't want to add to them
           // for real until we've done the first pass
@@ -95,6 +99,7 @@ export function getEventsModel<Spec extends SpecBase>(
           specDescriptions
         );
         currSpecState = specState;
+        currResultState = resultState;
         currListContext = listContext;
 
         if (
@@ -114,7 +119,11 @@ export function getEventsModel<Spec extends SpecBase>(
     // Second pass: add to events models
     specEventsWithBehaviour.reduce(
       (
-        { specState: prevSpecState, listContext: prevListContext },
+        {
+          specState: prevSpecState,
+          resultState: prevResultState,
+          listContext: prevListContext,
+        },
         event,
         eventIndex,
         currSpecEventsWithBehaviour
@@ -124,6 +133,7 @@ export function getEventsModel<Spec extends SpecBase>(
           eventIndex,
           specIndex,
           prevSpecState,
+          prevResultState,
           currSpecEventsWithBehaviour,
           buttonEvents,
           buttonListEvents,
@@ -133,7 +143,11 @@ export function getEventsModel<Spec extends SpecBase>(
           prevListContext,
           specDescriptions
         ),
-      { specState: getInitSpecState(spec), listContext: null as ListContext }
+      {
+        specState: getInitSpecState(spec),
+        listContext: null as ListContext,
+        resultState: [] as EffectResultState,
+      }
     );
   });
 
@@ -166,6 +180,7 @@ function updateStateAndUpdateModel<Spec extends SpecBase>(
   eventIndex: number,
   specIndex: number,
   specState: SpecState<Spec>,
+  resultState: EffectResultState,
   specEvents: SpecEvent[],
   buttonEvents: EventsModel<Spec>["buttonEvents"],
   buttonListEvents: EventsModel<Spec>["buttonListEvents"],
@@ -176,6 +191,7 @@ function updateStateAndUpdateModel<Spec extends SpecBase>(
   specDescriptions: string[]
 ): {
   specState: SpecState<Spec>;
+  resultState: EffectResultState;
   listContext: ListContext;
   replacedEvent?: SpecEvent;
 } {
@@ -214,6 +230,7 @@ function updateStateAndUpdateModel<Spec extends SpecBase>(
                   actions,
                   variables,
                   specState,
+                  resultState,
                   true
                 )
             );
@@ -232,6 +249,7 @@ function updateStateAndUpdateModel<Spec extends SpecBase>(
                 actions,
                 variables,
                 specState,
+                resultState,
                 false
               )
             ) {
@@ -256,6 +274,7 @@ function updateStateAndUpdateModel<Spec extends SpecBase>(
               ...specState,
               focus: event.component,
             },
+            resultState,
             listContext: null,
           };
 
@@ -266,12 +285,13 @@ function updateStateAndUpdateModel<Spec extends SpecBase>(
               ...specState,
               focus: event.component,
             },
+            resultState,
             listContext: null,
           };
 
         case "componentList":
           // No-op
-          return { specState, listContext };
+          return { specState, resultState, listContext };
       }
 
     case "clickOnList":
@@ -302,6 +322,7 @@ function updateStateAndUpdateModel<Spec extends SpecBase>(
                   actions,
                   variables,
                   specState,
+                  resultState,
                   true
                 )
             );
@@ -319,6 +340,7 @@ function updateStateAndUpdateModel<Spec extends SpecBase>(
                 actions,
                 variables,
                 specState,
+                resultState,
                 false
               )
             ) {
@@ -343,6 +365,7 @@ function updateStateAndUpdateModel<Spec extends SpecBase>(
               ...specState,
               focus: event.component,
             },
+            resultState,
             listContext: {
               index: event.index,
               variable: event.component.connectedVariable,
@@ -355,6 +378,7 @@ function updateStateAndUpdateModel<Spec extends SpecBase>(
               ...specState,
               focus: event.component,
             },
+            resultState,
             listContext: {
               index: event.index,
               variable: event.component.connectedVariable,
@@ -364,7 +388,19 @@ function updateStateAndUpdateModel<Spec extends SpecBase>(
 
     case "doEffect":
       // State doesn't change. We don't want to run side effects yet.
-      return { specState, listContext };
+      return { specState, resultState, listContext };
+
+    case "getEffect":
+      const { resultState: newResultState } = handleActionGeneratingModel(
+        event,
+        specState,
+        resultState,
+        variables,
+        position,
+        {},
+        specDescriptions
+      );
+      return { specState, resultState: newResultState, listContext };
 
     case "equals":
       const contextIndex =
@@ -377,6 +413,7 @@ function updateStateAndUpdateModel<Spec extends SpecBase>(
       } = handleActionGeneratingModel(
         event,
         specState,
+        resultState,
         variables,
         position,
         { index: contextIndex },
@@ -402,6 +439,7 @@ function updateStateAndUpdateModel<Spec extends SpecBase>(
 
           return {
             specState: newState,
+            resultState,
             listContext,
             replacedEvent: {
               ...event,
@@ -423,6 +461,7 @@ function updateStateAndUpdateModel<Spec extends SpecBase>(
 
           return {
             specState: newState,
+            resultState,
             listContext,
             replacedEvent: {
               ...event,
@@ -434,6 +473,7 @@ function updateStateAndUpdateModel<Spec extends SpecBase>(
         } else if (listBehaviours.type === "doNothing") {
           return {
             specState: newState,
+            resultState,
             listContext,
             replacedEvent: {
               ...event,
@@ -445,7 +485,7 @@ function updateStateAndUpdateModel<Spec extends SpecBase>(
         }
       }
 
-      return { specState: newState, listContext };
+      return { specState: newState, resultState, listContext };
 
     case "enterText":
       const focussedComponent = specState.focus;
@@ -473,6 +513,7 @@ function updateStateAndUpdateModel<Spec extends SpecBase>(
               [connectedVarName]: event.example,
             },
           },
+          resultState,
           listContext,
         };
       }
@@ -500,11 +541,12 @@ function updateStateAndUpdateModel<Spec extends SpecBase>(
               ),
             },
           },
+          resultState,
           listContext,
         };
       }
 
-      return { specState, listContext };
+      return { specState, resultState, listContext };
   }
 }
 

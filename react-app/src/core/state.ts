@@ -1,4 +1,5 @@
 import { Component } from "./components";
+import { EffectResult, EffectResultState, EffectVal } from "./effects";
 import { SpecBase } from "./spec";
 import {
   isVariable,
@@ -20,17 +21,31 @@ type SpecStateVars<Spec> = {
 /**
  * Recursively lookup a variable's primitive value within state
  */
-export function getValueFromState<Spec extends SpecBase>(
-  variable: Variable | VariableComparitor<Variable>,
+export function getValueFromState<Spec extends SpecBase, Val extends EffectVal>(
+  variable: Variable | VariableComparitor<Variable> | EffectResult<Val>,
   variables: { name: string; variable: Variable }[],
-  specState: SpecState<Spec>
+  specState: SpecState<Spec>,
+  resultState: EffectResultState
 ): string | string[] {
   if (typeof variable === "string") return variable;
 
   if (Array.isArray(variable)) {
     return variable.map(
-      (val) => getValueFromState(val, variables, specState) as string
+      (val) =>
+        getValueFromState(val, variables, specState, resultState) as string
     );
+  }
+
+  if (variable.type === "effectResult") {
+    const lookupResult = resultState.find(
+      (r) => r.effectResult.effect === variable.effect
+    );
+    if (!lookupResult) {
+      // No result stored yet (can happen when comparing actions)
+      return "";
+    }
+
+    return lookupResult.state as string | string[];
   }
 
   const lookupVariable = variables.find((v) => v.variable === variable)!;

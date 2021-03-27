@@ -1,18 +1,13 @@
 import { Component, ComponentList } from "./components";
-import { Effect } from "./effects";
-import {
-  TextVar,
-  Variable,
-  VariableComparitor,
-  VariableList,
-} from "./variables";
+import { Effect, EffectResult, EffectVal } from "./effects";
+import { Variable, VariableComparitor, VariableList } from "./variables";
 
 export type SpecBase = Record<string, SpecField>;
 
 export type SpecField =
   | Variable
   | Component
-  | Effect
+  | Effect<EffectVal>
   | VariableList<Variable>
   | ComponentList<Component, Variable>;
 
@@ -24,9 +19,13 @@ export type SpecFn = (args: {
   clickOn: (component: Exclude<Component, ComponentList<any, any>>) => void;
   clickOnIndex: (componentList: ComponentList<any, any>, index: number) => void;
   // Actions
-  doEffect: (effect: Effect) => void;
+  doEffect: (effect: Effect<void>) => void;
+  getEffect: <Val extends EffectVal>(
+    effect: Effect<Val>,
+    example: Val
+  ) => EffectResult<Val>;
   equals: <V extends Variable>(
     variable: V,
-    value: VariableComparitor<V>
+    value: VariableComparitor<V> | EffectResult<EffectVal>
   ) => void;
 }) => void;
