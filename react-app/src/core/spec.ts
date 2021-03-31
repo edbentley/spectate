@@ -22,7 +22,7 @@ export type SpecFn = (args: {
   doEffect: (effect: Effect<void>) => void;
   getEffect: <Val extends EffectVal>(
     effect: Effect<Val>,
-    example: Val
+    example: Val extends Promise<infer X> ? X : Val
   ) => EffectResult<Val>;
   equals: <V extends Variable>(
     variable: V,

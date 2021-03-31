@@ -16,7 +16,13 @@ import {
   VariableComparitor,
   VariableValue,
 } from "./variables";
-import { EffectResult, EffectResultState, EffectVal } from "./effects";
+import {
+  Effect,
+  EffectResult,
+  EffectResultState,
+  EffectVal,
+  ResolvedEffectVal,
+} from "./effects";
 import { replaceArray } from "./utils";
 
 /**
@@ -52,7 +58,7 @@ export function handleActionGeneratingModel<Spec extends SpecBase>(
         specState,
         resultState: addEffectResult(
           resultState,
-          action.result,
+          action.result.effect,
           action.result.example
         ),
       };
@@ -225,17 +231,17 @@ export function handleActionGeneratingModel<Spec extends SpecBase>(
 /**
  * Returns next state based on action. May produce side effects from actions.
  */
-export function handleActionRunningApp<Spec extends SpecBase>(
+export async function handleActionRunningApp<Spec extends SpecBase>(
   action: SpecEventAction,
   specState: SpecState<Spec>,
   resultState: EffectResultState,
   variables: { name: string; variable: Variable }[],
   eventContext: EventContext,
   listBehaviour?: { add: ListAddBehaviour; remove: ListRemoveBehaviour }
-): {
+): Promise<{
   specState: SpecState<Spec>;
   resultState: EffectResultState;
-} {
+}> {
   switch (action.type) {
     case "doEffect": {
       function getVal<V extends Variable>(variable: V) {
@@ -256,27 +262,26 @@ export function handleActionRunningApp<Spec extends SpecBase>(
           typeof variable
         >;
       }
-      const result = action.result.effect.fn(getVal, eventContext);
+      const result = await action.result.effect.fn(getVal, eventContext);
       const newResultState = addEffectResult(
         resultState,
-        action.result,
+        action.result.effect,
         result
       );
 
       const branchActions = getEffectActions(action, result);
 
-      return branchActions.reduce(
-        (prev, branchAction) =>
-          handleActionRunningApp(
-            branchAction,
-            prev.specState,
-            prev.resultState,
-            variables,
-            eventContext,
-            listBehaviour
-          ),
-        { specState, resultState: newResultState }
-      );
+      return branchActions.reduce(async (prevPromise, branchAction) => {
+        const prev = await prevPromise;
+        return handleActionRunningApp(
+          branchAction,
+          prev.specState,
+          prev.resultState,
+          variables,
+          eventContext,
+          listBehaviour
+        );
+      }, Promise.resolve({ specState, resultState: newResultState }));
     }
 
     case "equals": {
@@ -388,13 +393,13 @@ type ListBehaviourNothingResult = {
   name: string;
 };
 
-function addEffectResult<Val extends EffectVal>(
+function addEffectResult<Val extends ResolvedEffectVal>(
   resultState: EffectResultState,
-  result: EffectResult<Val>,
+  resultEffect: Effect<EffectVal>,
   resultValue: Val
 ): EffectResultState {
   const existingResultStateIndex = resultState.findIndex(
-    (r) => r.effectResult.effect === result.effect
+    (r) => r.effect === resultEffect
   );
   if (existingResultStateIndex !== -1) {
     return replaceArray(
@@ -409,7 +414,7 @@ function addEffectResult<Val extends EffectVal>(
   return [
     ...resultState,
     {
-      effectResult: result,
+      effect: resultEffect,
       state: resultValue,
     },
   ];

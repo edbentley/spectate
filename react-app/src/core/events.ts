@@ -1,5 +1,11 @@
 import { Component, ComponentList } from "./components";
-import { Effect, EffectResult, EffectResultState, EffectVal } from "./effects";
+import {
+  Effect,
+  EffectResult,
+  EffectResultState,
+  EffectVal,
+  ResolvedEffectVal,
+} from "./effects";
 import { SpecBase } from "./spec";
 import { getValueFromState, SpecState, stateFieldsSimilar } from "./state";
 import { Variable, VariableComparitor } from "./variables";
@@ -41,7 +47,7 @@ type GetEffectAction = {
   // Options are populated in model
   options: {
     // Result state for relevant effect at this point
-    resultVal: EffectVal;
+    resultVal: ResolvedEffectVal;
     actions: SpecEventAction[];
     position: EventPosition;
   }[];
@@ -242,7 +248,10 @@ export type EventPosition = {
 /**
  * Chooses the getEffect branch based on the result
  */
-export function getEffectActions(action: GetEffectAction, result: EffectVal) {
+export function getEffectActions(
+  action: GetEffectAction,
+  result: ResolvedEffectVal
+) {
   const chosenBranch = action.options.find(
     (option) =>
       option.resultVal !== undefined &&

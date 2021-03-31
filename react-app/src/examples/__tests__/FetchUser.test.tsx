@@ -1,36 +1,45 @@
 import React from "react";
-import { render, fireEvent, screen } from "@testing-library/react";
+import {
+  render,
+  fireEvent,
+  screen,
+  waitForElementToBeRemoved,
+} from "@testing-library/react";
 import FetchUser from "../FetchUser";
 
 // Note: these tests are to confirm Spectate is working.
 // You don't need to write them in your apps!
 
-afterEach(() => {
-  jest.spyOn(Math, "random").mockRestore();
-});
-
-test("Can show user ID", () => {
+test("Can show username", async () => {
   const warnSpy = jest.spyOn(console, "warn");
-  jest.spyOn(Math, "random").mockReturnValue(0.6);
+
+  mockFetchOnce(true, { name: "Spectate" });
 
   render(<FetchUser />);
 
   const fetchButton = screen.getByText("Fetch");
 
-  // No user id
-  expect(screen.queryByText("User ID: 9a31495d")).toBe(null);
+  // No username
+  expect(screen.queryByText("Username: Spectate")).toBe(null);
 
   fireEvent.click(fetchButton);
 
-  // User id
-  expect(screen.queryByText("User ID: 9a31495d")).not.toBe(null);
+  // Loading
+  await screen.findByText("Loading");
+
+  // Finished loading
+  await waitForElementToBeRemoved(() => screen.queryByText("Loading"));
+
+  // Username
+  expect(screen.queryByText("Username: Spectate")).not.toBe(null);
 
   expect(warnSpy).not.toHaveBeenCalled();
 });
 
-test("Shows error if no user ID", () => {
+test("Shows error if fetch failed", async () => {
   const warnSpy = jest.spyOn(console, "warn");
-  jest.spyOn(Math, "random").mockReturnValue(0.1);
+
+  mockFetchOnce(false, {});
 
   render(<FetchUser />);
 
@@ -41,10 +50,31 @@ test("Shows error if no user ID", () => {
 
   fireEvent.click(fetchButton);
 
+  // Loading
+  await screen.findByText("Loading");
+
+  // Finished loading
+  await waitForElementToBeRemoved(() => screen.queryByText("Loading"));
+
   // Error message
   expect(screen.queryByText("Couldn't get user")).not.toBe(null);
-  // No user id
-  expect(screen.queryByText("User ID: 9a31495d")).toBe(null);
+  // No username
+  expect(screen.queryByText("Username: Spectate")).toBe(null);
 
   expect(warnSpy).not.toHaveBeenCalled();
 });
+
+function mockFetchOnce<T extends {}>(ok: boolean, json: T) {
+  window.fetch = jest.fn().mockImplementationOnce(() => {
+    return new Promise((res) => {
+      setTimeout(
+        () =>
+          res({
+            ok,
+            json: async () => json,
+          }),
+        1
+      );
+    });
+  });
+}

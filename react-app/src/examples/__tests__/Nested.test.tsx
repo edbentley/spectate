@@ -1,11 +1,11 @@
 import React from "react";
-import { render, fireEvent, screen } from "@testing-library/react";
+import { render, fireEvent, screen, waitFor } from "@testing-library/react";
 import Nested from "../Nested";
 
 // Note: these tests are to confirm Spectate is working.
 // You don't need to write them in your apps!
 
-test("Logs username prop when clicked on", () => {
+test("Logs username prop when clicked on", async () => {
   const consoleSpy = jest.spyOn(console, "log").mockImplementation(() => null);
   const warnSpy = jest.spyOn(console, "warn");
 
@@ -16,11 +16,11 @@ test("Logs username prop when clicked on", () => {
 
   fireEvent.change(usernameInput, { target: { value: "hello" } });
   fireEvent.click(logButton);
-  expect(consoleSpy).toHaveBeenCalledWith("hello");
+  await waitFor(() => expect(consoleSpy).toHaveBeenCalledWith("hello"));
 
   fireEvent.change(usernameInput, { target: { value: "spectate" } });
   fireEvent.click(logButton);
-  expect(consoleSpy).toHaveBeenCalledWith("spectate");
+  await waitFor(() => expect(consoleSpy).toHaveBeenCalledWith("hello"));
 
   expect(warnSpy).not.toHaveBeenCalled();
 });

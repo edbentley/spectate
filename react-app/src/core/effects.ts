@@ -13,16 +13,18 @@ export const newEffect = <Val extends EffectVal>(
   fn: Effect<Val>["fn"]
 ): Effect<Val> => ({ type: "effect", fn });
 
-export type EffectVal = string | string[] | void;
+export type EffectVal = ResolvedEffectVal | Promise<string> | Promise<string[]>;
+export type ResolvedEffectVal = string | string[] | void;
+
 export type EffectResult<Val extends EffectVal> = {
   type: "effectResult";
-  example: Val;
+  example: Val extends Promise<infer X> ? X : Val;
   effect: Effect<Val>;
 };
 
-export type EffectResultState = EffectResultStateItem<EffectVal>[];
+export type EffectResultState = EffectResultStateItem<ResolvedEffectVal>[];
 
-type EffectResultStateItem<Val extends EffectVal> = {
-  effectResult: EffectResult<Val>;
-  state: Val;
+type EffectResultStateItem<ResolvedVal extends ResolvedEffectVal> = {
+  effect: Effect<EffectVal>;
+  state: ResolvedVal;
 };

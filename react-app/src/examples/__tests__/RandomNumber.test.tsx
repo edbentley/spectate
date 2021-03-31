@@ -13,7 +13,7 @@ afterEach(() => {
   jest.spyOn(Math, "random").mockRestore();
 });
 
-test("Can generate random numbers", () => {
+test("Can generate random numbers", async () => {
   const warnSpy = jest.spyOn(console, "warn");
 
   render(<RandomNumber />);
@@ -26,7 +26,7 @@ test("Can generate random numbers", () => {
   fireEvent.click(generateButton);
 
   // Random number
-  expect(screen.queryByText("1")).not.toBe(null);
+  await screen.findByText("1");
 
   expect(warnSpy).not.toHaveBeenCalled();
 });

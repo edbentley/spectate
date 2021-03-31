@@ -37,9 +37,7 @@ export function getValueFromState<Spec extends SpecBase, Val extends EffectVal>(
   }
 
   if (variable.type === "effectResult") {
-    const lookupResult = resultState.find(
-      (r) => r.effectResult.effect === variable.effect
-    );
+    const lookupResult = resultState.find((r) => r.effect === variable.effect);
     if (!lookupResult) {
       // No result stored yet (can happen when comparing actions)
       return "";

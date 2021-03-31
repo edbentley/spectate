@@ -4,10 +4,12 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
+    "types": "tsc --noEmit -p tsconfig.json",
     "lint": "eslint --ext .js,.ts,.tsx .",
     "test": "jest",
     "test:watch": "jest --watch",
-    "serve": "vite preview"
+    "serve": "vite preview",
+    "ci": "npm run lint && npm run types && npm run build && npm run test"
   },
   "dependencies": {
     "react": "^17.0.0",

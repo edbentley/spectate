@@ -1,11 +1,11 @@
 import React from "react";
-import { render, fireEvent, screen } from "@testing-library/react";
+import { render, fireEvent, screen, waitFor } from "@testing-library/react";
 import EmailForm from "../EmailForm";
 
 // Note: these tests are to confirm Spectate is working.
 // You don't need to write them in your apps!
 
-test("Can sign up with email and password", () => {
+test("Can sign up with email and password", async () => {
   const consoleSpy = jest.spyOn(console, "log").mockImplementation(() => null);
   const warnSpy = jest.spyOn(console, "warn");
 
@@ -21,14 +21,16 @@ test("Can sign up with email and password", () => {
 
   fireEvent.click(signUpButton);
 
-  expect(consoleSpy).toHaveBeenCalledWith("POST", {
-    email: "hello@test.com",
-    password: "my_password",
-  });
+  await waitFor(() =>
+    expect(consoleSpy).toHaveBeenCalledWith("POST", {
+      email: "hello@test.com",
+      password: "my_password",
+    })
+  );
   expect(warnSpy).not.toHaveBeenCalled();
 });
 
-test("Shows error if empty email", () => {
+test("Shows error if empty email", async () => {
   const consoleSpy = jest.spyOn(console, "log");
   const warnSpy = jest.spyOn(console, "warn");
 
@@ -38,13 +40,13 @@ test("Shows error if empty email", () => {
 
   fireEvent.click(signUpButton);
 
+  await screen.findByText("Email can't be empty");
+
   expect(consoleSpy).not.toHaveBeenCalled();
   expect(warnSpy).not.toHaveBeenCalled();
-
-  expect(screen.queryByText("Email can't be empty")).not.toBe(null);
 });
 
-test("Shows error if empty password", () => {
+test("Shows error if empty password", async () => {
   const consoleSpy = jest.spyOn(console, "log");
   const warnSpy = jest.spyOn(console, "warn");
 
@@ -57,8 +59,8 @@ test("Shows error if empty password", () => {
 
   fireEvent.click(signUpButton);
 
+  await screen.findByText("Password can't be empty");
+
   expect(consoleSpy).not.toHaveBeenCalled();
   expect(warnSpy).not.toHaveBeenCalled();
-
-  expect(screen.queryByText("Password can't be empty")).not.toBe(null);
 });

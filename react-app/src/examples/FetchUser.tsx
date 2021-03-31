@@ -7,37 +7,51 @@ import { NewSpec } from "../core/spec";
 import { newEffect } from "../core/effects";
 
 const mySpec = (newSpec: NewSpec) => {
-  const UserId = newText();
-  const ErrorMessage = newText();
+  const Username = newText();
+  const Status = newText();
 
   const FetchButton = newButton();
 
-  const FetchUserId = newEffect(() => {
-    return Math.random() < 0.5 ? "" : "9a31495d";
+  const FetchRandomUsername = newEffect(async () => {
+    // There's a chance this will choose an invalid number (to see fail state)
+    const userNumber = Math.floor(Math.random() * 15);
+
+    const response = await fetch(
+      `https://jsonplaceholder.typicode.com/users/${userNumber}`
+    );
+    if (response.ok) {
+      const json = await response.json();
+      return json.name;
+    }
+    return "";
   });
 
-  newSpec("Can show user ID", ({ clickOn, getEffect, equals }) => {
+  newSpec("Can show username", ({ clickOn, getEffect, equals }) => {
     clickOn(FetchButton);
 
-    const result = getEffect(FetchUserId, "7fb6ff5");
+    equals(Status, "Loading");
 
-    equals(UserId, result);
-    equals(ErrorMessage, "");
+    const result = getEffect(FetchRandomUsername, "7fb6ff5");
+
+    equals(Username, result);
+    equals(Status, "");
   });
 
-  newSpec("Shows error if no user ID", ({ clickOn, getEffect, equals }) => {
+  newSpec("Shows error if no username", ({ clickOn, getEffect, equals }) => {
     clickOn(FetchButton);
 
-    getEffect(FetchUserId, "");
+    equals(Status, "Loading");
 
-    equals(UserId, "");
-    equals(ErrorMessage, "Couldn't get user");
+    getEffect(FetchRandomUsername, "");
+
+    equals(Username, "");
+    equals(Status, "Couldn't get user");
   });
 
   return {
     FetchButton,
-    UserId,
-    ErrorMessage,
+    Username,
+    Status,
   };
 };
 
@@ -48,8 +62,8 @@ function App() {
     <div className="App">
       <button {...props.FetchButton}>Fetch</button>
 
-      {props.UserId && <span>User ID: {props.UserId}</span>}
-      {props.ErrorMessage && <span>{props.ErrorMessage}</span>}
+      {props.Username && <span>Username: {props.Username}</span>}
+      {props.Status && <span>{props.Status}</span>}
     </div>
   );
 }

@@ -101,7 +101,7 @@ export function getComponentHandlers<Spec extends SpecBase>(
   components.forEach(({ name, component }) => {
     if (component.type === "button") {
       buttons[name] = (appSpecState, appResultState) => ({
-        onClick: () => {
+        onClick: async () => {
           // Get button's potential events
           const relevantEvents = eventsModel.buttonEvents[name];
 
@@ -117,8 +117,11 @@ export function getComponentHandlers<Spec extends SpecBase>(
           }
 
           // Then run that event's actions
-          const nextAppState = bestEvent.actions.reduce(
-            ({ specState, resultState }, action) => {
+          bestEvent.actions.reduce(
+            async (prev, action) => {
+              const { specState, resultState } = await prev;
+
+              let getAppState;
               if (
                 action.type === "equals" &&
                 action.variable.type === "variableList"
@@ -132,7 +135,7 @@ export function getComponentHandlers<Spec extends SpecBase>(
                 const addBehaviour = [...behaviour.add][0];
                 const removeBehaviour = [...behaviour.remove][0];
 
-                return handleActionRunningApp(
+                getAppState = handleActionRunningApp(
                   action,
                   specState,
                   resultState,
@@ -140,21 +143,27 @@ export function getComponentHandlers<Spec extends SpecBase>(
                   {},
                   { add: addBehaviour, remove: removeBehaviour }
                 );
+              } else {
+                getAppState = handleActionRunningApp(
+                  action,
+                  specState,
+                  resultState,
+                  variables,
+                  {}
+                );
               }
-              return handleActionRunningApp(
-                action,
-                specState,
-                resultState,
-                variables,
-                {}
-              );
-            },
-            { specState: appSpecState, resultState: appResultState }
-          );
+              const nextAppState = await getAppState;
 
-          // Then update with resulting event's state changes
-          updateSpecState(() => nextAppState.specState);
-          updateResultState(() => nextAppState.resultState);
+              // Update with resulting event's state changes after each async step
+              updateSpecState(() => nextAppState.specState);
+              updateResultState(() => nextAppState.resultState);
+              return nextAppState;
+            },
+            Promise.resolve({
+              specState: appSpecState,
+              resultState: appResultState,
+            })
+          );
         },
       });
     } else if (component.type === "input") {
@@ -200,7 +209,7 @@ export function getComponentHandlers<Spec extends SpecBase>(
         }
         if (componentType === "button") {
           return {
-            onClick: (index) => {
+            onClick: async (index) => {
               // Repeat of button
               const relevantEvents = eventsModel.buttonListEvents[name];
 
@@ -221,22 +230,27 @@ export function getComponentHandlers<Spec extends SpecBase>(
                 return;
               }
 
-              const nextAppState = bestEvent.actions.reduce(
-                ({ specState, resultState }, action) =>
-                  handleActionRunningApp(
+              bestEvent.actions.reduce(
+                async (prev, action) => {
+                  const { specState, resultState } = await prev;
+                  const nextAppState = await handleActionRunningApp(
                     action,
                     specState,
                     resultState,
                     variables,
                     { index },
                     { add: addBehaviour, remove: removeBehaviour }
-                  ),
-                { specState: appSpecState, resultState: appResultState }
+                  );
+                  // Update with resulting event's state changes after each async step
+                  updateSpecState(() => nextAppState.specState);
+                  updateResultState(() => nextAppState.resultState);
+                  return nextAppState;
+                },
+                Promise.resolve({
+                  specState: appSpecState,
+                  resultState: appResultState,
+                })
               );
-
-              // Then update with resulting event's state changes
-              updateSpecState(() => nextAppState.specState);
-              updateResultState(() => nextAppState.resultState);
             },
           };
         }
