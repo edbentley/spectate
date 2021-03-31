@@ -1,8 +1,239 @@
 # Spectate
 
-Writing UI code and then tests can be laborious. What if we could just write the tests describing what the app should do, and have that generate the UI code?
+Writing UI code and then tests can be laborious. What if we could just write the tests describing what the app should do, and have that generate the UI code? 🤔
 
-Spectate is a library that can generate UI logic through the tests you write (known as _specs_). It slots in to React as a state manager so you only need to write the markup - and can be made to work with other UI libraries too.
+Spectate is a library that can generate UI logic through the tests you write (the specs). It slots in to React as a state manager so you only need to write the markup - and can be made to work with other UI libraries too.
+
+## ⚠️ Status
+
+Spectate is an exciting new research project, but it's still a prototype. It only supports a few use cases, likely has many bugs and is not well optimised. Have a try to discover a new way of building UIs, but it's not recommended for use in production!
+
+## Examples
+
+Fully working examples demonstrating Spectate can be seen in [this live demo](#TODO).
+
+## Usage
+
+```
+npm install @spectate/react
+```
+
+Then write your own component and its specs together. Specs should read like tests and describe what the app should do during user interactions.
+
+Here's an example of a signup page:
+
+```js
+import React from "react";
+import {
+  useSpec,
+  newButton,
+  newInput,
+  NewSpec,
+  newEffect,
+  newText,
+} from "@spectate/react";
+
+// Remove ": NewSpec" if you're not using TypeScript
+
+const mySpec = (newSpec: NewSpec) => {
+  const EmailText = newText();
+  const EmailInput = newInput(EmailText);
+
+  const PasswordText = newText();
+  const PasswordInput = newInput({
+    inputType: "password",
+    connectedVar: PasswordText,
+  });
+
+  const ErrorText = newText();
+
+  const SignUpButton = newButton();
+
+  const PostJson = newEffect((getVal) => {
+    console.log("POST", {
+      email: getVal(EmailText),
+      password: getVal(PasswordText),
+    });
+  });
+
+  newSpec(
+    "Can sign up with email and password",
+    ({ clickOn, enterText, doEffect, equals }) => {
+      clickOn(EmailInput);
+      enterText("hi@test.com");
+
+      clickOn(PasswordInput);
+      enterText("password!");
+
+      clickOn(SignUpButton);
+
+      doEffect(PostJson);
+      equals(ErrorText, "");
+    }
+  );
+
+  newSpec("Shows error if empty email", ({ clickOn, equals }) => {
+    clickOn(SignUpButton);
+
+    equals(ErrorText, "Email can't be empty");
+  });
+
+  newSpec("Shows error if empty password", ({ clickOn, enterText, equals }) => {
+    clickOn(EmailInput);
+    enterText("hi@test.com");
+
+    clickOn(SignUpButton);
+
+    equals(ErrorText, "Password can't be empty");
+  });
+
+  return {
+    EmailInput,
+    EmailText,
+    PasswordInput,
+    PasswordText,
+    SignUpButton,
+    ErrorText,
+  };
+};
+
+function App() {
+  const props = useSpec(mySpec);
+
+  return (
+    <div>
+      <label>
+        Email <input {...props.EmailInput} />
+      </label>
+
+      <label>
+        Password <input {...props.PasswordInput} />
+      </label>
+
+      <button {...props.SignUpButton}>Sign Up</button>
+
+      {props.ErrorText && <span>{props.ErrorText}</span>}
+    </div>
+  );
+}
+
+export default App;
+```
+
+## API
+
+### Variables
+
+#### newText
+
+Creates a text variable to be used in a spec.
+
+#### newVarList(variable)
+
+Creates a spec list variable, argument should be the type of the list.
+
+```js
+const MyTextList = newVarList(newText());
+```
+
+### Components
+
+#### newInput(textVar)
+
+Creates an input to be used in a spec. Argument can be a text variable, or object with connected text variable and input type:
+
+```js
+const MyInput = newInput({
+  connectedVar: myText,
+  inputType: "password",
+});
+```
+
+#### newButton()
+
+Creates a button to be used in a spec.
+
+#### newComponentList(component, listVariable)
+
+Creates a spec component list, arguments should be the component type of the list and its connected list variable.
+
+```js
+const MyButtonList = newComponentList(newButton(), MyTextList);
+```
+
+### Effects
+
+#### newEffect((getVal) => void)
+
+Creates an effect to be used in a spec. Argument is a function which runs effectful code (e.g. IO), and can optionally return a value (including a Promise). The function argument has its own argument `getVal` to get the value of spec variables inside the effect.
+
+```js
+const MyEffect = newEffect((getVal) => {
+  console.log("POST", {
+    email: getVal(EmailText),
+    password: getVal(PasswordText),
+  });
+});
+```
+
+### newSpec(description, spec)
+
+`newSpec` is the argument of your spec function. `newSpec` is itself a function to describe individual spec cases.
+
+```js
+newSpec("Do thing", (args) => {
+  // ...
+});
+```
+
+The `args` of `newSpec` is an object with the following fields to describe your app:
+
+#### clickOn(component)
+
+Click on a component. Clicking on an input will focus it.
+
+#### clickOnIndex(componentList, index)
+
+Click on a component within a list.
+
+#### enterText(example)
+
+Enter text into the currently focussed input. Currently Spectate will only distinguish between empty example values (`""` and `[]`) and non-empty values to define different behaviour.
+
+#### doEffect(effect)
+
+Run the effect.
+
+#### getEffect(effect, example)
+
+Run the effect and save its return value. This can be used later in the spec.
+
+```js
+const result = getEffect(FetchRandomId, "7fb6ff5");
+equals(MyId, result);
+```
+
+#### equals(variable, value)
+
+Set the variable to the value passed in. Value can be a literal, another variable or the result of an effect.
+
+### useSpec(mySpec)
+
+A React hook that takes a spec function describing the behaviour of the component. Returns props to pass into React elements whose names match the return object of the spec function.
+
+```js
+const mySpec = (newSpec) => {
+  // ...
+  return {
+    MyInput, // ---> props.MyInput
+    MyText, // ---> props.MyText
+  }
+}
+function App() {
+  const props = useSpec(mySpec);
+  // ...
+}
+```
 
 ## How Spectate works
 

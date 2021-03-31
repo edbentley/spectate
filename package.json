@@ -1,0 +1,53 @@
+{
+  "name": "@spectate/react",
+  "version": "0.1.0",
+  "description": "Write tests, generate UI. The React implementation.",
+  "main": "dist/react/index.js",
+  "types": "dist/react/index.d.ts",
+  "files": ["dist"],
+  "scripts": {
+    "lint": "eslint --ext .js,.ts,.tsx .",
+    "types": "tsc --noEmit -p tsconfig.json",
+    "build": "rm -rf dist/ && tsc",
+    "ci": "npm run lint && npm run types && npm run build"
+  },
+  "author": "Ed Bentley",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/edbentley/spectate.git"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "peerDependencies": {
+    "react": "*",
+    "react-dom": "*"
+  },
+  "devDependencies": {
+    "@types/react": "^17.0.3",
+    "@types/react-dom": "^17.0.3",
+    "@typescript-eslint/parser": "^4.20.0",
+    "eslint": "^7.23.0",
+    "eslint-config-prettier": "^8.1.0",
+    "eslint-plugin-prettier": "^3.3.1",
+    "prettier": "^2.2.1",
+    "react": "^17.0.2",
+    "react-dom": "^17.0.2",
+    "typescript": "^4.2.3"
+  },
+  "eslintConfig": {
+    "parser": "@typescript-eslint/parser",
+    "parserOptions": {
+      "ecmaVersion": 2019,
+      "sourceType": "module"
+    },
+    "extends": [
+      "plugin:prettier/recommended"
+    ],
+    "ignorePatterns": [
+      "dist",
+      "node_modules"
+    ]
+  }
+}

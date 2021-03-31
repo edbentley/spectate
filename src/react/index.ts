@@ -16,6 +16,16 @@ import {
 } from "../core/components";
 import { EffectResultState } from "../core/effects";
 
+///// Re-export core ----------
+
+export { newButton, newInput, newComponentList } from "../core/components";
+export { newEffect } from "../core/effects";
+export { newText, newVarList } from "../core/variables";
+
+export type { NewSpec } from "../core/spec";
+
+///// -------------------------
+
 export type SpecProps<Spec> = {
   [K in keyof Spec]: SpecFieldProps<Spec[K]>;
 };

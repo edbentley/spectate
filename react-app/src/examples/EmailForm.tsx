@@ -1,9 +1,12 @@
 import React from "react";
-import { useSpec } from "../react";
-import { newInput, newButton } from "../core/components";
-import { newText } from "../core/variables";
-import { NewSpec } from "../core/spec";
-import { newEffect } from "../core/effects";
+import {
+  useSpec,
+  newButton,
+  newInput,
+  NewSpec,
+  newEffect,
+  newText,
+} from "../../../src/react";
 
 const mySpec = (newSpec: NewSpec) => {
   const EmailText = newText();

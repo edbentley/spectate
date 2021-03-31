@@ -1,9 +1,11 @@
 import React from "react";
-import { useSpec } from "../react";
-import { newButton } from "../core/components";
-import { newText } from "../core/variables";
-import { NewSpec } from "../core/spec";
-import { newEffect } from "../core/effects";
+import {
+  useSpec,
+  newButton,
+  NewSpec,
+  newEffect,
+  newText,
+} from "../../../src/react";
 
 const mySpec = (newSpec: NewSpec) => {
   const RandomNumber = newText();

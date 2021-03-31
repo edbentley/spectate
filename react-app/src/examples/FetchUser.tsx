@@ -1,8 +1,5 @@
 import React from "react";
-import { useSpec } from "../react";
-import { newText } from "../core/variables";
-import { NewSpec } from "../core/spec";
-import { newEffect } from "../core/effects";
+import { useSpec, NewSpec, newEffect, newText } from "../../../src/react";
 
 const mySpec = (newSpec: NewSpec) => {
   const Username = newText();

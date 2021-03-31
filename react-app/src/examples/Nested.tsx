@@ -1,9 +1,12 @@
 import React, { useMemo } from "react";
-import { useSpec } from "../react";
-import { newButton, newInput } from "../core/components";
-import { NewSpec } from "../core/spec";
-import { newEffect } from "../core/effects";
-import { newText } from "../core/variables";
+import {
+  useSpec,
+  newButton,
+  newInput,
+  NewSpec,
+  newEffect,
+  newText,
+} from "../../../src/react";
 
 const appSpec = (newSpec: NewSpec) => {
   const UsernameText = newText();

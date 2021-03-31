@@ -1,9 +1,14 @@
 import React from "react";
-import { useSpec } from "../react";
-import { newInput, newButton, newComponentList } from "../core/components";
-import { newText, newVarList } from "../core/variables";
-import { NewSpec } from "../core/spec";
-import { newEffect } from "../core/effects";
+import {
+  useSpec,
+  newButton,
+  newInput,
+  NewSpec,
+  newEffect,
+  newText,
+  newComponentList,
+  newVarList,
+} from "../../../src/react";
 
 const mySpec = (newSpec: NewSpec) => {
   const NewCardText = newText();
