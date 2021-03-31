@@ -10,7 +10,7 @@ Spectate is an exciting new research project, but it's still a prototype. It onl
 
 ## Examples
 
-Fully working examples demonstrating Spectate can be seen in [this live demo](#TODO).
+Fully working examples demonstrating Spectate can be seen in [this live demo](https://edbentley.github.io/spectate).
 
 ## Usage
 

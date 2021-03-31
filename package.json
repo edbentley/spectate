@@ -9,7 +9,8 @@
     "lint": "eslint --ext .js,.ts,.tsx .",
     "types": "tsc --noEmit -p tsconfig.json",
     "build": "rm -rf dist/ && tsc",
-    "ci": "npm run lint && npm run types && npm run build"
+    "ci": "npm run lint && npm run types && npm run build",
+    "pages": "git subtree push --prefix react-app/dist origin gh-pages"
   },
   "author": "Ed Bentley",
   "license": "MIT",

@@ -7,4 +7,6 @@ export default defineConfig({
   resolve: {
     dedupe: ["react", "react-dom"],
   },
+  // gh-pages relative assets
+  base: "",
 });

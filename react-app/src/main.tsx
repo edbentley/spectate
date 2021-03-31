@@ -68,7 +68,7 @@ function SelectView(props: { setView: (el: JSX.Element) => void }) {
       <a
         href={`https://github.com/edbentley/spectate/tree/master/react-app/src/examples/${viewFileName}.tsx`}
       >
-        View Code
+        View Code: {viewFileName}.tsx
       </a>
     </div>
   );
