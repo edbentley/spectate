@@ -71,7 +71,7 @@ export function parseSpec<Spec extends SpecBase>(
 
   const newSpec: NewSpec = (description, specFn) => {
     const index = events.length;
-    events.push([]);
+    events.push([{ type: "pageLoad" }]);
     specDescriptions.push(description);
     specFn({
       doEffect: doEffect(index),

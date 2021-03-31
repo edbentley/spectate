@@ -10,19 +10,12 @@ import FetchUser from "../FetchUser";
 // Note: these tests are to confirm Spectate is working.
 // You don't need to write them in your apps!
 
-test("Can show username", async () => {
+test("Can show username on page load", async () => {
   const warnSpy = jest.spyOn(console, "warn");
 
   mockFetchOnce(true, { name: "Spectate" });
 
   render(<FetchUser />);
-
-  const fetchButton = screen.getByText("Fetch");
-
-  // No username
-  expect(screen.queryByText("Username: Spectate")).toBe(null);
-
-  fireEvent.click(fetchButton);
 
   // Loading
   await screen.findByText("Loading");
@@ -42,13 +35,6 @@ test("Shows error if fetch failed", async () => {
   mockFetchOnce(false, {});
 
   render(<FetchUser />);
-
-  const fetchButton = screen.getByText("Fetch");
-
-  // No error message
-  expect(screen.queryByText("Couldn't get user")).toBe(null);
-
-  fireEvent.click(fetchButton);
 
   // Loading
   await screen.findByText("Loading");

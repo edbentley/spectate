@@ -11,17 +11,24 @@ import { getValueFromState, SpecState, stateFieldsSimilar } from "./state";
 import { Variable, VariableComparitor } from "./variables";
 
 export type Events = SpecEvent[][];
-export type SpecEvent = SpecEventUserInput | SpecEventAction | SpecEventClick;
-export type SpecEventClick =
+export type SpecEvent =
+  | SpecEventUserInput
+  | SpecEventAction
+  | SpecEventClick
+  | SpecEventPage;
+type SpecEventClick =
   | { type: "clickOn"; component: Component }
   | {
       type: "clickOnList";
       component: ComponentList<Component, Variable>;
       index: number;
     };
-export type SpecEventUserInput = {
+type SpecEventUserInput = {
   type: "enterText";
   example: string;
+};
+type SpecEventPage = {
+  type: "pageLoad";
 };
 export type SpecEventAction =
   | { type: "doEffect"; effect: Effect<EffectVal> }
@@ -234,7 +241,7 @@ export function formatEventPosition(
   return `
 
 Spec name: "${specDescriptions[eventPosition.specIndex]}"
-Event number: ${eventPosition.eventIndex + 1} (${eventPosition.eventType})
+Event number: ${eventPosition.eventIndex} (${eventPosition.eventType})
 
 `;
 }

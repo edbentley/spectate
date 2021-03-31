@@ -14,6 +14,12 @@ import { replaceArray } from "./utils";
 import { EffectResultState } from "./effects";
 
 export interface SpecComponentHandlers<Spec extends SpecBase> {
+  // Actions called on page load
+  onPageLoad: (
+    appSpecState: SpecState<Spec>,
+    appResultState: EffectResultState
+  ) => void;
+
   // Record of key: button name, val: onClick function determined using similarity scores
   buttons: Record<
     string,
@@ -97,6 +103,32 @@ export function getComponentHandlers<Spec extends SpecBase>(
   const buttons: SpecComponentHandlers<Spec>["buttons"] = {};
   const inputs: SpecComponentHandlers<Spec>["inputs"] = {};
   const lists: SpecComponentHandlers<Spec>["lists"] = {};
+
+  const onPageLoad = (
+    appSpecState: SpecState<Spec>,
+    appResultState: EffectResultState
+  ) => {
+    eventsModel.pageLoad.actions.reduce(
+      async (prev, action) => {
+        const { specState, resultState } = await prev;
+        const nextAppState = await handleActionRunningApp(
+          action,
+          specState,
+          resultState,
+          variables,
+          {}
+        );
+        // Update with resulting event's state changes after each async step
+        updateSpecState(() => nextAppState.specState);
+        updateResultState(() => nextAppState.resultState);
+        return nextAppState;
+      },
+      Promise.resolve({
+        specState: appSpecState,
+        resultState: appResultState,
+      })
+    );
+  };
 
   components.forEach(({ name, component }) => {
     if (component.type === "button") {
@@ -261,6 +293,7 @@ export function getComponentHandlers<Spec extends SpecBase>(
   });
 
   return {
+    onPageLoad,
     buttons,
     inputs,
     lists,

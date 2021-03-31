@@ -27,6 +27,10 @@ import { replaceArray } from "./utils";
 import { EffectResultState } from "./effects";
 
 type EventsModel<Spec extends SpecBase> = {
+  // Actions following page load
+  // An error is thrown if actions are different between specs
+  pageLoad: { actions: SpecEventAction[] };
+
   // Key is component name
   buttonEvents: Record<
     string,
@@ -68,6 +72,8 @@ export function getEventsModel<Spec extends SpecBase>(
   variables: { name: string; variable: Variable }[],
   specDescriptions: string[]
 ): EventsModel<Spec> {
+  const pageLoad: EventsModel<Spec>["pageLoad"] = { actions: [] };
+  const dummyPageLoad: EventsModel<Spec>["pageLoad"] = { actions: [] };
   const buttonEvents: EventsModel<Spec>["buttonEvents"] = {};
   const buttonListEvents: EventsModel<Spec>["buttonListEvents"] = {};
   const variableListBehaviour: EventsModel<Spec>["variableListBehaviour"] = {};
@@ -95,6 +101,7 @@ export function getEventsModel<Spec extends SpecBase>(
           currSpecEventsWithBehaviour,
           // Use dummy vars for events model since we don't want to add to them
           // for real until we've done the first pass
+          dummyPageLoad,
           {},
           {},
           {},
@@ -140,6 +147,7 @@ export function getEventsModel<Spec extends SpecBase>(
           prevSpecState,
           prevResultState,
           currSpecEventsWithBehaviour,
+          pageLoad,
           buttonEvents,
           buttonListEvents,
           variableListBehaviour,
@@ -171,6 +179,7 @@ export function getEventsModel<Spec extends SpecBase>(
   });
 
   return {
+    pageLoad,
     buttonEvents,
     buttonListEvents,
     variableListBehaviour,
@@ -187,6 +196,7 @@ function updateStateAndUpdateModel<Spec extends SpecBase>(
   specState: SpecState<Spec>,
   resultState: EffectResultState,
   specEvents: SpecEvent[],
+  pageLoad: EventsModel<Spec>["pageLoad"],
   buttonEvents: EventsModel<Spec>["buttonEvents"],
   buttonListEvents: EventsModel<Spec>["buttonListEvents"],
   variableListBehaviour: EventsModel<Spec>["variableListBehaviour"],
@@ -206,6 +216,48 @@ function updateStateAndUpdateModel<Spec extends SpecBase>(
     eventType: event.type,
   };
   switch (event.type) {
+    case "pageLoad": {
+      const actions = getNextActions(
+        specEvents,
+        specIndex,
+        eventIndex,
+        specDescriptions
+      );
+
+      if (specIndex === 0) {
+        // First time we set the model
+        pageLoad.actions = actions;
+        return { specState, resultState, listContext };
+      }
+
+      if (
+        !actionsEqual(
+          actions,
+          pageLoad.actions,
+          variables,
+          specState,
+          resultState,
+          false
+        )
+      ) {
+        const posStr = formatEventPosition(position, specDescriptions);
+        throw Error(
+          `Conflicting actions with other specs on page load in ${posStr}`
+        );
+      }
+
+      checkForOtherEffectOptions(
+        pageLoad.actions,
+        actions,
+        variables,
+        specState,
+        resultState,
+        specDescriptions
+      );
+
+      return { specState, resultState, listContext };
+    }
+
     case "clickOn":
       switch (event.component.type) {
         case "button":
@@ -266,60 +318,14 @@ function updateStateAndUpdateModel<Spec extends SpecBase>(
               // Actions are equivalent, so just add it to positions
               existing.positions.push(position);
 
-              // Add to the options array
-              const lastExistingEvent =
-                existing.actions[existing.actions.length - 1];
-              const lastNewEvent = actions[actions.length - 1];
-              if (
-                lastExistingEvent?.type === "getEffect" &&
-                lastNewEvent?.type === "getEffect"
-              ) {
-                // Make sure there are no conflicts in options
-
-                let conflictingPositions:
-                  | [EventPosition, EventPosition]
-                  | null = null;
-                lastExistingEvent.options.forEach((lastExistingEventOption) => {
-                  lastNewEvent.options.forEach((lastNewEventOption) => {
-                    if (
-                      lastExistingEventOption.resultVal !== undefined &&
-                      lastNewEventOption.resultVal !== undefined &&
-                      stateFieldsSimilar(
-                        lastExistingEventOption.resultVal,
-                        lastNewEventOption.resultVal
-                      ) &&
-                      !actionsEqual(
-                        lastExistingEventOption.actions,
-                        lastNewEventOption.actions,
-                        variables,
-                        specState,
-                        resultState,
-                        false
-                      )
-                    ) {
-                      conflictingPositions = [
-                        lastExistingEventOption.position,
-                        lastNewEventOption.position,
-                      ];
-                      return;
-                    }
-                  });
-                });
-                if (conflictingPositions !== null) {
-                  const posStr = formatEventPosition(
-                    conflictingPositions[0],
-                    specDescriptions
-                  );
-                  const conflictPosStr = formatEventPosition(
-                    conflictingPositions[1],
-                    specDescriptions
-                  );
-                  throw Error(
-                    `Conflicting actions for the same getEffect result in ${conflictPosStr} and ${posStr}`
-                  );
-                }
-                lastExistingEvent.options.push(...lastNewEvent.options);
-              }
+              checkForOtherEffectOptions(
+                existing.actions,
+                actions,
+                variables,
+                specState,
+                resultState,
+                specDescriptions
+              );
             } else {
               const conflictPos = existing.positions[0];
               const conflictPosStr = formatEventPosition(
@@ -416,6 +422,15 @@ function updateStateAndUpdateModel<Spec extends SpecBase>(
             ) {
               // Actions are equivalent, so just add it to positions
               existing.positions.push(position);
+
+              checkForOtherEffectOptions(
+                pageLoad.actions,
+                actions,
+                variables,
+                specState,
+                resultState,
+                specDescriptions
+              );
             } else {
               const conflictPos = existing.positions[0];
               const conflictPosStr = formatEventPosition(
@@ -621,3 +636,66 @@ function updateStateAndUpdateModel<Spec extends SpecBase>(
 }
 
 type ListContext = null | { variable: VariableList<Variable>; index: number };
+
+/**
+ * Add to the options array of existing actions if they end with a "getEffect"
+ */
+function checkForOtherEffectOptions<Spec extends SpecBase>(
+  existingActions: SpecEventAction[],
+  newActions: SpecEventAction[],
+  variables: { name: string; variable: Variable }[],
+  specState: SpecState<Spec>,
+  resultState: EffectResultState,
+  specDescriptions: string[]
+) {
+  const lastExistingEvent = existingActions[existingActions.length - 1];
+  const lastNewEvent = newActions[newActions.length - 1];
+  if (
+    lastExistingEvent?.type === "getEffect" &&
+    lastNewEvent?.type === "getEffect"
+  ) {
+    // Make sure there are no conflicts in options
+
+    let conflictingPositions: [EventPosition, EventPosition] | null = null;
+    lastExistingEvent.options.forEach((lastExistingEventOption) => {
+      lastNewEvent.options.forEach((lastNewEventOption) => {
+        if (
+          lastExistingEventOption.resultVal !== undefined &&
+          lastNewEventOption.resultVal !== undefined &&
+          stateFieldsSimilar(
+            lastExistingEventOption.resultVal,
+            lastNewEventOption.resultVal
+          ) &&
+          !actionsEqual(
+            lastExistingEventOption.actions,
+            lastNewEventOption.actions,
+            variables,
+            specState,
+            resultState,
+            false
+          )
+        ) {
+          conflictingPositions = [
+            lastExistingEventOption.position,
+            lastNewEventOption.position,
+          ];
+          return;
+        }
+      });
+    });
+    if (conflictingPositions !== null) {
+      const posStr = formatEventPosition(
+        conflictingPositions[0],
+        specDescriptions
+      );
+      const conflictPosStr = formatEventPosition(
+        conflictingPositions[1],
+        specDescriptions
+      );
+      throw Error(
+        `Conflicting actions for the same getEffect result in ${conflictPosStr} and ${posStr}`
+      );
+    }
+    lastExistingEvent.options.push(...lastNewEvent.options);
+  }
+}

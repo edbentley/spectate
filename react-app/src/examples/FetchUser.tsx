@@ -10,8 +10,6 @@ const mySpec = (newSpec: NewSpec) => {
   const Username = newText();
   const Status = newText();
 
-  const FetchButton = newButton();
-
   const FetchRandomUsername = newEffect(async () => {
     // There's a chance this will choose an invalid number (to see fail state)
     const userNumber = Math.floor(Math.random() * 15);
@@ -26,9 +24,7 @@ const mySpec = (newSpec: NewSpec) => {
     return "";
   });
 
-  newSpec("Can show username", ({ clickOn, getEffect, equals }) => {
-    clickOn(FetchButton);
-
+  newSpec("Can show username on page load", ({ getEffect, equals }) => {
     equals(Status, "Loading");
 
     const result = getEffect(FetchRandomUsername, "7fb6ff5");
@@ -37,9 +33,7 @@ const mySpec = (newSpec: NewSpec) => {
     equals(Status, "");
   });
 
-  newSpec("Shows error if no username", ({ clickOn, getEffect, equals }) => {
-    clickOn(FetchButton);
-
+  newSpec("Shows error if no username", ({ getEffect, equals }) => {
     equals(Status, "Loading");
 
     getEffect(FetchRandomUsername, "");
@@ -49,7 +43,6 @@ const mySpec = (newSpec: NewSpec) => {
   });
 
   return {
-    FetchButton,
     Username,
     Status,
   };
@@ -60,8 +53,6 @@ function App() {
 
   return (
     <div className="App">
-      <button {...props.FetchButton}>Fetch</button>
-
       {props.Username && <span>Username: {props.Username}</span>}
       {props.Status && <span>{props.Status}</span>}
     </div>

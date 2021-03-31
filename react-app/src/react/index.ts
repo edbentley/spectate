@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { NewSpec, SpecBase } from "../core/spec";
 import {
   SpecComponentHandlers,
@@ -57,6 +57,10 @@ export function useSpec<Spec extends SpecBase>(
       ),
     [spec]
   );
+
+  useEffect(() => {
+    componentHandlers.onPageLoad(specState, resultState);
+  }, []);
 
   return getProps(componentHandlers, spec, specState, resultState);
 }
