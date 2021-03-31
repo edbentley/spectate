@@ -1,7 +1,5 @@
 import React from "react";
-import "./App.css";
 import { useSpec } from "../react";
-import { newButton } from "../core/components";
 import { newText } from "../core/variables";
 import { NewSpec } from "../core/spec";
 import { newEffect } from "../core/effects";

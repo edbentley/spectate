@@ -1,5 +1,4 @@
 import React, { useMemo } from "react";
-import "./App.css";
 import { useSpec } from "../react";
 import { newButton, newInput } from "../core/components";
 import { NewSpec } from "../core/spec";

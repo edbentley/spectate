@@ -1,5 +1,4 @@
 import React from "react";
-import "./App.css";
 import { useSpec } from "../react";
 import { newButton } from "../core/components";
 import { newText } from "../core/variables";
@@ -16,11 +15,15 @@ const mySpec = (newSpec: NewSpec) => {
   });
 
   newSpec("Can generate random numbers", ({ clickOn, getEffect, equals }) => {
+    const initResult = getEffect(GenerateRandomNumber, "8");
+
+    equals(RandomNumber, initResult);
+
     clickOn(GenerateButton);
 
-    const result = getEffect(GenerateRandomNumber, "8");
+    const buttonResult = getEffect(GenerateRandomNumber, "3");
 
-    equals(RandomNumber, result);
+    equals(RandomNumber, buttonResult);
   });
 
   return {

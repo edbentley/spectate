@@ -1,5 +1,4 @@
 import React from "react";
-import "./App.css";
 import { useSpec } from "../react";
 import { newInput, newButton, newComponentList } from "../core/components";
 import { newText, newVarList } from "../core/variables";

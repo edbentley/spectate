@@ -1,5 +1,4 @@
 import React from "react";
-import "./App.css";
 import { useSpec } from "../react";
 import { newInput, newButton } from "../core/components";
 import { newText } from "../core/variables";
@@ -83,7 +82,7 @@ function App() {
 
       <button {...props.SignUpButton}>Sign Up</button>
 
-      {props.ErrorText && <span>{props.ErrorText}</span>}
+      {props.ErrorText && <span className="error">{props.ErrorText}</span>}
     </div>
   );
 }

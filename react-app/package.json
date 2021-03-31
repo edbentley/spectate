@@ -40,7 +40,8 @@
     },
     "extends": [
       "plugin:prettier/recommended"
-    ]
+    ],
+    "ignorePatterns": ["dist", "node_modules"]
   },
   "jest": {
     "preset": "ts-jest",
