@@ -178,9 +178,14 @@ export function handleActionGeneratingModel<Spec extends SpecBase>(
               behaviours.remove.add("removeFromStart");
             }
           }
+        } else if (
+          newValueStart !== prevValueStart &&
+          newValueEnd !== prevValueEnd
+        ) {
+          behaviours.add.add("overwrite");
         } else {
           throw Error(
-            `Invalid array operation in ${getPosString()} You can only add one element at the beginning or end of array, and can only remove one element from beginning, end or list index of array`
+            `Invalid array operation in ${getPosString()} You can only add one element at the beginning or end of array, replace array, clear array, or remove one element from beginning, end or list index of array`
           );
         }
 

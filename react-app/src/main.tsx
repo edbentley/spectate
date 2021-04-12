@@ -6,6 +6,7 @@ import FetchUser from "./examples/FetchUser";
 import Nested from "./examples/Nested";
 import RandomNumber from "./examples/RandomNumber";
 import TodoApp from "./examples/TodoApp";
+import Articles from "./examples/Articles";
 
 function App() {
   const [View, setView] = useState(<EmailForm />);
@@ -63,6 +64,14 @@ function SelectView(props: { setView: (el: JSX.Element) => void }) {
           }}
         >
           TODO app
+        </button>
+        <button
+          onClick={() => {
+            props.setView(<Articles />);
+            setViewFileName("Articles");
+          }}
+        >
+          Articles
         </button>
       </div>
       <a

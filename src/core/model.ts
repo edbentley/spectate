@@ -165,15 +165,15 @@ export function getEventsModel<Spec extends SpecBase>(
   });
 
   Object.entries(variableListBehaviour).forEach(([name, behaviour]) => {
-    if (behaviour.add.size !== 1) {
+    if (behaviour.add.size > 1) {
       const options = [...behaviour.add].join(" or ");
       console.warn(
-        `Couldn't determine exact add to array behaviour for ${name} (could be both ${options}), try adding more tests cases to clarify.`
+        `Couldn't determine exact add to array behaviour for ${name} (could be ${options}), try adding more test cases to clarify.`
       );
-    } else if (behaviour.remove.size !== 1) {
+    } else if (behaviour.remove.size > 1) {
       const options = [...behaviour.remove].join(" or ");
       console.warn(
-        `Couldn't determine exact remove from array behaviour for ${name} (could be both ${options}), try adding more tests cases to clarify.`
+        `Couldn't determine exact remove from array behaviour for ${name} (could be ${options}), try adding more test cases to clarify.`
       );
     }
   });

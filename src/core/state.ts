@@ -108,7 +108,7 @@ export function stateFieldsSimilar(
 ): boolean {
   // For text arrays, only consider the array length.
   if (Array.isArray(fieldA) && Array.isArray(fieldB)) {
-    return fieldB.length === fieldA.length;
+    return Boolean(fieldB.length) === Boolean(fieldA.length);
   }
 
   // For text variables, we consider if string is empty or not.
